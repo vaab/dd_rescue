@@ -243,7 +243,7 @@ int copyfile (off_t max, int bs)
 	sxfer += wr; xfer += rd;
 	if (reverse) {ipos -= rd; opos -= rd;}
 	else {ipos += rd; opos += rd;}
-	if (rd != wr) fplog (stderr, "dd_rescue: (warning): assumption rd(%i) == wr(%i) failed!\n", rd, wr);
+	if (rd != wr && !sparse) fplog (stderr, "dd_rescue: (warning): assumption rd(%i) == wr(%i) failed!\n", rd, wr);
       } /* rd > 0 */
     } /* errno */
     if (!quiet && !(xfer % (8*softbs))) printstatus (stdout, 0, bs);
@@ -334,7 +334,7 @@ void printreport ()
 
 void breakhandler (int sig)
 {
-  fplog (stderr, "dd_rescue: (fatal): Caught signal %i(%s). Exiting!\n",
+  fplog (stderr, "dd_rescue: (fatal): Caught signal %i \"%s\". Exiting!\n",
 	 sig, strsignal (sig));
   printreport ();
   cleanup ();
