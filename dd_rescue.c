@@ -91,6 +91,22 @@ inline float difftimetv(const struct timeval* const t2,
 		(float) (t2->tv_usec - t1->tv_usec) * 1e-6;
 }
 
+/* Write to file and simultaneously log to logfdile, if exsiting */
+int fplog(FILE* const file, const char * const fmt, ...)
+{
+	int ret = 0;
+	va_list vl; 
+	va_start(vl, fmt);
+	if (file) 
+		ret = vfprintf(file, fmt, vl);
+	va_end(vl);
+	if (logfd) {
+		va_start(vl, fmt);
+		ret = vfprintf(logfd, fmt, vl);
+		va_end(vl);
+	}
+	return ret;
+}
 
 int check_identical(const char* const in, const char* const on)
 {
@@ -134,17 +150,19 @@ int openfile(const char* const fname, const int flags)
 void check_seekable(const int id, const int od)
 {
 	errno = 0;
-	if (lseek(id, (off_t)0, SEEK_SET)) {
-		fprintf(stderr, "dd_rescue: (warning): input  file is not seekable!\n");
-		fprintf(stderr, "dd_rescue: (warning): %s\n", strerror(errno));
+	if (lseek(id, (off_t)0, SEEK_SET) != 0) {
+		fplog(stderr, "dd_rescue: (warning): input  file is not seekable!\n");
+		fplog(stderr, "dd_rescue: (warning): %s\n", strerror(errno));
 		i_chr = 1;
-	}
+	} //else
+	//	lseek(id, (off_t)0, SEEK_SET);
 	errno = 0;
-	if (lseek(od, (off_t)0, SEEK_SET)) {
-		fprintf(stderr, "dd_rescue: (warning): output file is not seekable!\n");
-		fprintf(stderr, "dd_rescue: (warning): %s\n", strerror(errno));
+	if (lseek(od, (off_t)0, SEEK_SET) != 0) {
+		fplog(stderr, "dd_rescue: (warning): output file is not seekable!\n");
+		fplog(stderr, "dd_rescue: (warning): %s\n", strerror(errno));
 		o_chr = 1;
-	}
+	} //else
+	//	lseek(od, (off_t)0, SEEK_SET);
 	errno = 0;
 }
 
@@ -167,23 +185,6 @@ void doprint(FILE* const file, const int bs, const clock_t cl,
 			right, right, right, right, right, right, right, right, right,
 			(float)xfer/(t1*1024),
 			100.0*(cl-startclock)/(CLOCKS_PER_SEC*t1));
-}
-
-/* Write to file and simultaneously log to logfdile, if exsiting */
-int fplog(FILE* const file, const char * const fmt, ...)
-{
-	int ret = 0;
-	va_list vl; 
-	va_start(vl, fmt);
-	if (file) 
-		ret = vfprintf(file, fmt, vl);
-	va_end(vl);
-	if (logfd) {
-		va_start(vl, fmt);
-		ret = vfprintf(logfd, fmt, vl);
-		va_end(vl);
-	}
-	return ret;
 }
 
 void printstatus(FILE* const file1, FILE* const file2, 
@@ -250,13 +251,29 @@ int blockiszero(const char* blk, const int ln)
 	return 1;
 }
 
+inline ssize_t mypread(int fd, void* bf, size_t sz, off_t off)
+{
+	if (i_chr) 
+		return read(fd, bf, sz);
+	else
+		return pread(fd, bf, sz, off);
+}
+
+inline ssize_t mypwrite(int fd, void* bf, size_t sz, off_t off)
+{
+	if (o_chr)
+		return write(fd, bf, sz);
+	else
+		return pwrite(fd, bf, sz, off);
+}
+
 
 ssize_t readblock(const int toread)
 {
 	ssize_t err, rd = 0;
 	//errno = 0; /* should not be necessary */
 	do {
-		rd += (err = pread(ides, buf+rd, toread-rd, ipos+rd-reverse*toread));
+		rd += (err = mypread(ides, buf+rd, toread-rd, ipos+rd-reverse*toread));
 		if (err == -1) 
 			rd++;
 	} while ((err == -1 && (errno == EINTR || errno == EAGAIN))
@@ -270,7 +287,7 @@ ssize_t writeblock(const int towrite)
 	ssize_t err, wr = 0;
 	//errno = 0; /* should not be necessary */
 	do {
-		wr += (err = pwrite(odes, buf+wr, towrite-wr, opos+wr-reverse*towrite));
+		wr += (err = mypwrite(odes, buf+wr, towrite-wr, opos+wr-reverse*towrite));
 		if (err == -1) 
 			wr++;
 	} while ((err == -1 && (errno == EINTR || errno == EAGAIN))
@@ -719,9 +736,9 @@ int main(int argc, char* argv[])
 		copyperm(ides, odes);
 			
 	check_seekable(ides, odes);
-	if (i_chr || o_chr) {
+	if (0 && i_chr && o_chr) {
 		fprintf(stderr, "dd_rescue: (fatal): Sorry, there is no support yet for non-seekable\n");
-		fprintf(stderr, "                    input or output. This will hopefully change soon ... \n");
+		fprintf(stderr, "                    input and output. This will hopefully change soon ... \n");
 		exit(19);
 	}
 
@@ -770,6 +787,16 @@ int main(int argc, char* argv[])
 		}
   	}
 
+	if (o_chr && opos != 0) {
+		fplog(stderr, "dd_rescue: (fatal): outfile not seekable, but opos !=0 requested!\n");
+		cleanup(); exit(19);
+	}
+	if (i_chr && ipos != 0) {
+		fplog(stderr, "dd_rescue: (fatal): infile not seekable, but ipos !=0 requested!\n");
+		cleanup(); exit(19);
+	}
+		
+
 	if (verbose) {
 		printinfo(stderr);
 		if (logfd)
@@ -786,6 +813,7 @@ int main(int argc, char* argv[])
 	startclock = clock();
 	gettimeofday(&starttime, NULL);
 	memcpy(&lasttime, &starttime, sizeof(lasttime));
+
 	if (!quiet) {
 		fprintf(stderr, "%s%s%s", down, down, down);
 		printstatus(stderr, 0, softbs, 0);
