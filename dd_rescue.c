@@ -333,7 +333,7 @@ void printhelp ()
   printf ("Options: -s ipos    start position in  input file (default=0),\n");
   printf ("         -S opos    start position in output file (def=ipos);\n");
   printf ("         -b softbs  block size for copy operation (def=%i),\n", SOFTBLOCKSIZE );
-  printf ("         -b hardbs  fallback block size in case of errs (def=%i);\n", HARDBLOCKSIZE );
+  printf ("         -B hardbs  fallback block size in case of errs (def=%i);\n", HARDBLOCKSIZE );
   printf ("         -e maxerr  exit after maxerr errors (def=0=infinite);\n");
   printf ("         -m maxxfer maximum amount of data to be transfered (def=0=inf);\n");
   printf ("         -l logfile name of a file to log errors and summary to (def=\"\");\n");

@@ -79,16 +79,15 @@ but it should use the terminal description database instead.
 Copyright
 ---------
 This little program is protected by the GNU General Public License (GPL). 
-(See the file COPYRIGHT, which probably exists a few hundred times on your
+(See the file COPYING, which probably exists a few hundred times on your
 computer. If not: I will send you one.)
 To summarize:
 * You are free to use this program for anything you like. However, if you
-  use code from this program, your program must be released under the GNU
-  GPL again.
-* You are not allowed to make money by selling this program. However, you
-  are allowed to put it on CDs or other media and charge a moderate fee
-  for copying and distributing it. You have to provide the source code, too,
-  then.
+  release a program that uses code from this program, your program must be
+  released under the terms of the GNU GPL again.
+* You are allowed to put this program on CDs or other media and charge a 
+  fee for copying and distributing it. You have to provide the source code,
+  and the GPL text, too, then.
 * There is no warranty whatsoever for this program. If it crashes your
   disks, it's at your risk.
 * This summary does not replace reading the GNU GPL itself.
