@@ -18,7 +18,10 @@
  * - Use termcap to fetch cursor up code
  */
 
-#define VERSION "0.95"
+#ifndef VERSION
+# define VERSION "(unknown)"
+#endif
+
 #define ID "$Id$"
 
 #ifndef SOFTBLOCKSIZE
@@ -81,7 +84,7 @@ int openfile (char* fname, int flags)
 void cleanup ()
 {
   if (odes != -1) {
-    /* Make sure, the output file is expanded to the last position */
+    /* Make sure, the output file is expanded to the last (first) position */
     pwrite (odes, buf, 0, opos);
     close (odes); 
   }
