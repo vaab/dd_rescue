@@ -55,7 +55,7 @@
 #include <sys/stat.h>
 
 int softbs, hardbs;
-int maxerr, nrerr, reverse, trunc, abwrerr, sparse, nosparse;
+int maxerr, nrerr, reverse, dotrunc, abwrerr, sparse, nosparse;
 int verbose, quiet, interact, force;
 char* buf;
 char *lname, *iname, *oname;
@@ -64,7 +64,7 @@ off_t ipos, opos, xfer, lxfer, sxfer, fxfer, maxxfer;
 int ides, odes, identical;
 char i_chr, o_chr;
 
-FILE *log;
+FILE *logf;
 struct timeval starttime, lasttime, currenttime;
 struct timezone tz;
 clock_t startclock;
@@ -175,9 +175,9 @@ int fplog(FILE* const file, const char * const fmt, ...)
 	if (file) 
 		ret = vfprintf(file, fmt, vl);
 	va_end(vl);
-	if (log) {
+	if (logf) {
 		va_start(vl, fmt);
-		ret = vfprintf(log, fmt, vl);
+		ret = vfprintf(logf, fmt, vl);
 		va_end(vl);
 	}
 	return ret;
@@ -219,7 +219,7 @@ void printreport()
 	fplog(report, "Summary for %s -> %s:\n", iname, oname);
 	if (report)
 		fprintf(stderr, "%s%s%s", down, down, down);
-	printstatus(report, log, 0, 1);
+	printstatus(report, logf, 0, 1);
 }
 
 void cleanup()
@@ -231,8 +231,8 @@ void cleanup()
 	}
 	if (ides != -1)
 		close(ides);
-	if (log)
-		fclose(log);
+	if (logf)
+		fclose(logf);
 	if (buf)
 		free(buf);
 }
@@ -324,7 +324,7 @@ int copyfile(const off_t max, const int bs)
 		/* READ ERROR */
 		if (rd < toread/* && errno*/) {
 			/* Read error occurred: Print warning */
-			printstatus(stderr, log, bs, 1); errs++;
+			printstatus(stderr, logf, bs, 1); errs++;
 			/* Some errnos are fatal */
 			if (errno == ESPIPE || errno == EPERM || errno == ENXIO || errno == ENODEV) {
 				fplog(stderr, "dd_rescue: (warning): %s (%.1fk): %s!\n", 
@@ -526,7 +526,7 @@ void printinfo(FILE* const file)
 	fplog(file, "dd_rescue: (info): Logfile: %s, Maxerr: %li\n",
 	      (lname? lname: "(none)"), maxerr);
 	fplog(file, "dd_rescue: (info): Reverse: %s, Trunc: %s, interactive: %s\n",
-	      YESNO(reverse), YESNO(trunc), YESNO(interact));
+	      YESNO(reverse), YESNO(dotrunc), YESNO(interact));
 	fplog(file, "dd_rescue: (info): abort on Write errs: %s, spArse write: %s\n",
 	      YESNO(abwrerr), (sparse? "yes": (nosparse? "never": "if err")));
 	/*
@@ -552,19 +552,19 @@ int main(int argc, char* argv[])
   	/* defaults */
 	softbs = SOFTBLOCKSIZE; hardbs = HARDBLOCKSIZE;
 	maxerr = 0; ipos = (off_t)-1; opos = (off_t)-1; maxxfer = 0; 
-	reverse = 0; trunc = 0; abwrerr = 0; sparse = 0; nosparse = 0;
+	reverse = 0; dotrunc = 0; abwrerr = 0; sparse = 0; nosparse = 0;
 	verbose = 0; quiet = 0; interact = 0; force = 0;
 	lname = 0; iname = 0; oname = 0;
 
 	/* Initialization */
 	sxfer = 0; fxfer = 0; lxfer = 0; xfer = 0;
-	ides = -1; odes = -1; log = 0; nrerr = 0; buf = 0;
+	ides = -1; odes = -1; logf = 0; nrerr = 0; buf = 0;
 	i_chr = 0; o_chr = 0;
 
 	while ((c = getopt(argc, argv, ":rtfihqvVwaAb:B:m:e:s:S:l:")) != -1) {
 		switch (c) {
 			case 'r': reverse = 1; break;
-			case 't': trunc = O_TRUNC; break;
+			case 't': dotrunc = O_TRUNC; break;
 			case 'i': interact = 1; force = 0; break;
 			case 'f': interact = 0; force = 1; break;
 			case 'a': sparse = 1; nosparse = 0; break;
@@ -609,7 +609,7 @@ int main(int argc, char* argv[])
 
 	if (lname) {
 		c = openfile(lname, O_WRONLY | O_CREAT /*| O_EXCL*/);
-		log = fdopen(c, "a");
+		logf = fdopen(c, "a");
 	}
 
 	/* sanity checks */
@@ -636,7 +636,7 @@ int main(int argc, char* argv[])
 	memset(buf, 0, softbs);
 
 	identical = check_identical(iname, oname);
-	if (identical && trunc && !force) {
+	if (identical && dotrunc && !force) {
 		fplog(stderr, "dd_rescue: (fatal): infile and outfile are identical and trunc turned on!\n");
 		cleanup(); exit(19);
 	}
@@ -661,7 +661,7 @@ int main(int argc, char* argv[])
 		int a;
 		do {
 			fprintf(stderr, "dd_rescue: (question): %s existing %s [y/n] ?", 
-				(trunc? "Overwrite": "Write into"), oname);
+				(dotrunc? "Overwrite": "Write into"), oname);
 			a = toupper(fgetc (stdin)); //fprintf (stderr, "\n");
 		} while (a != 'Y' && a != 'N');
 		if (a == 'N') {
@@ -670,7 +670,7 @@ int main(int argc, char* argv[])
 		}
 	}
 
-	odes = openfile(oname, O_WRONLY | O_CREAT | olarge /*| O_EXCL*/ | trunc);
+	odes = openfile(oname, O_WRONLY | O_CREAT | olarge /*| O_EXCL*/ | dotrunc);
 	if (odes < 0) {
 		fplog(stderr, "dd_rescue: (fatal): %s: %s\n", oname, strerror(errno));
 		cleanup(); exit(24);
@@ -730,8 +730,8 @@ int main(int argc, char* argv[])
 
 	if (verbose) {
 		printinfo(stderr);
-		if (log) 
-			printinfo(log);
+		if (logf)
+			printinfo(logf);
 	}
 
 	/* Install signal handler */
