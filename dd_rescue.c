@@ -63,6 +63,7 @@ char *lname, *iname, *oname;
 off_t ipos, opos, xfer, lxfer, sxfer, fxfer, maxxfer;
 
 int ides, odes, identical;
+int o_dir_in, o_dir_out;
 char i_chr, o_chr;
 
 FILE *logfd;
