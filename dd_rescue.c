@@ -91,7 +91,13 @@ int check_identical (char* in, char* on)
 
 int openfile (char* fname, int flags)
 {
-  int des = open (fname, flags, 0640);
+  int des;
+  if (!strcmp (fname, "-")) {
+	if (flags & O_WRONLY) des = 1;  /* stdout */
+	else des = 0;			/* stdin */
+  }
+  else
+	des = open (fname, flags, 0640);
   if (des == -1) {
     char buf[128];
     snprintf (buf, 128, "dd_rescue: (fatal): open \"%s\" failed", fname);
@@ -237,7 +243,7 @@ int copyfile (off_t max, int bs)
     if (!errno && rd == 0) break;
     if (errno) {
       /* Read error occurred: Print warning */
-      printstatus (stdout, log, bs, 1); errs++;
+      printstatus (stderr, log, bs, 1); errs++;
       /* Some errnos are fatal */
       if (errno == ESPIPE) {
 	fplog (stderr, "dd_rescue: (warning): %s (%.1fk): %s!\n", 
@@ -256,7 +262,7 @@ int copyfile (off_t max, int bs)
 	  fplog (stderr, "dd_rescue: (fatal): maxerr reached!\n");
 	  cleanup (); exit (32);
 	}
-	printf ("%s%s%s", down, down, down);
+	fprintf (stderr, "%s%s%s", down, down, down);
 	/* advance */
 	if (nosparse) errs += (writeblock (toread) == -1? 1: 0);
 	fxfer += toread; xfer += toread;
@@ -265,7 +271,7 @@ int copyfile (off_t max, int bs)
       } else {
 	/* Error with large blocks: Try small ones ... */
 	off_t new_max = xfer + toread;
-	if (verbose) printf ("dd_rescue: (info): problems at ipos %.1fk: %s \n                 fall back to smaller blocksize \n%s%s%s",
+	if (verbose) fprintf (stderr, "dd_rescue: (info): problems at ipos %.1fk: %s \n                 fall back to smaller blocksize \n%s%s%s",
 			     (float)ipos/1024, strerror(errno), down, down, down);
 	errs += (err = copyfile (new_max, hardbs));
 	
@@ -276,7 +282,7 @@ int copyfile (off_t max, int bs)
 	  if (new_max > max) new_max = max;
 	  errs += (err = copyfile (new_max, hardbs));
 	}
-	if (verbose) printf ("dd_rescue: (info): ipos %.1fk promote to large bs again! \n%s%s%s",
+	if (verbose) fprintf (stderr, "dd_rescue: (info): ipos %.1fk promote to large bs again! \n%s%s%s",
 			     (float)ipos/1024, down, down, down);
 	
       } /* bs == hardbs */
@@ -294,9 +300,9 @@ int copyfile (off_t max, int bs)
       } /* rd > 0 */
     } /* errno */
     if (!quiet && !(xfer % (16*softbs)) && (xfer % (512*softbs))) 
-      printstatus (stdout, 0, bs, 0);
+      printstatus (stderr, 0, bs, 0);
     if (!quiet && !(xfer % (512*softbs))) 
-      printstatus (stdout, 0, bs, 1);
+      printstatus (stderr, 0, bs, 1);
   } /* remain */
   return errs;
 }
@@ -321,36 +327,36 @@ off_t readint (char* ptr)
   
 void printversion ()
 {
-  printf ("\ndd_rescue Version %s, garloff@suse.de, GNU GPL\n", VERSION);
-  printf (" (%s)\n", ID);
+  fprintf (stderr, "\ndd_rescue Version %s, garloff@suse.de, GNU GPL\n", VERSION);
+  fprintf (stderr, " (%s)\n", ID);
 }
 
 void printhelp ()
 {
   printversion ();
-  printf ("dd_rescue copies data from one file (or block device) to another\n");
-  printf ("USAGE: dd_rescue [options] infile outfile\n");
-  printf ("Options: -s ipos    start position in  input file (default=0),\n");
-  printf ("         -S opos    start position in output file (def=ipos);\n");
-  printf ("         -b softbs  block size for copy operation (def=%i),\n", SOFTBLOCKSIZE );
-  printf ("         -B hardbs  fallback block size in case of errs (def=%i);\n", HARDBLOCKSIZE );
-  printf ("         -e maxerr  exit after maxerr errors (def=0=infinite);\n");
-  printf ("         -m maxxfer maximum amount of data to be transfered (def=0=inf);\n");
-  printf ("         -l logfile name of a file to log errors and summary to (def=\"\");\n");
-  printf ("         -r         reverse direction copy (def=forward);\n");
-  printf ("         -t         truncate output file (def=no);\n");
-  printf ("         -w         abort on Write errors (def=no);\n");
-  printf ("         -a         spArse file writing (def=no),\n");
-  printf ("         -A         Always write blocks, zeroed if err (def=no);\n");
-  printf ("         -i         interactive: ask before overwriting data (def=no);\n");
-  printf ("         -f         force: skip some sanity checks (def=no);\n");
-  printf ("         -q         quiet operation,\n");
-  printf ("         -v         verbose operation;\n");
-  printf ("         -V         display version and exit;\n");
-  printf ("         -h         display this help and exit.\n");
-  printf ("Note: Sizes may be given in units b(=512), k(=1024) or M(=1024*1024) bytes\n");
-  printf ("This program is useful to rescue data in case of I/O errors, because\n");
-  printf (" it does not necessarily aborts or truncates the output.\n");
+  fprintf (stderr, "dd_rescue copies data from one file (or block device) to another\n");
+  fprintf (stderr, "USAGE: dd_rescue [options] infile outfile\n");
+  fprintf (stderr, "Options: -s ipos    start position in  input file (default=0),\n");
+  fprintf (stderr, "         -S opos    start position in output file (def=ipos);\n");
+  fprintf (stderr, "         -b softbs  block size for copy operation (def=%i),\n", SOFTBLOCKSIZE );
+  fprintf (stderr, "         -B hardbs  fallback block size in case of errs (def=%i);\n", HARDBLOCKSIZE );
+  fprintf (stderr, "         -e maxerr  exit after maxerr errors (def=0=infinite);\n");
+  fprintf (stderr, "         -m maxxfer maximum amount of data to be transfered (def=0=inf);\n");
+  fprintf (stderr, "         -l logfile name of a file to log errors and summary to (def=\"\");\n");
+  fprintf (stderr, "         -r         reverse direction copy (def=forward);\n");
+  fprintf (stderr, "         -t         truncate output file (def=no);\n");
+  fprintf (stderr, "         -w         abort on Write errors (def=no);\n");
+  fprintf (stderr, "         -a         spArse file writing (def=no),\n");
+  fprintf (stderr, "         -A         Always write blocks, zeroed if err (def=no);\n");
+  fprintf (stderr, "         -i         interactive: ask before overwriting data (def=no);\n");
+  fprintf (stderr, "         -f         force: skip some sanity checks (def=no);\n");
+  fprintf (stderr, "         -q         quiet operation,\n");
+  fprintf (stderr, "         -v         verbose operation;\n");
+  fprintf (stderr, "         -V         display version and exit;\n");
+  fprintf (stderr, "         -h         display this help and exit.\n");
+  fprintf (stderr, "Note: Sizes may be given in units b(=512), k(=1024) or M(=1024*1024) bytes\n");
+  fprintf (stderr, "This program is useful to rescue data in case of I/O errors, because\n");
+  fprintf (stderr, " it does not necessarily aborts or truncates the output.\n");
 }
 
 #define YESNO(flag) (flag? "yes": "no")
@@ -378,10 +384,10 @@ void printreport ()
 {
   /* report */
   FILE *report = 0;
-  if (!quiet || nrerr) report = stdout;
+  if (!quiet || nrerr) report = stderr;
   fplog (report, "Summary for %s -> %s:\n", iname, oname);
-  if (report) printf ("%s%s%s", down, down, down);
-  if (report) printstatus (stdout, log, 0, 1);
+  if (report) fprintf (stderr, "%s%s%s", down, down, down);
+  if (report) printstatus (stderr, log, 0, 1);
 }
 
 void breakhandler (int sig)
@@ -491,16 +497,20 @@ int main (int argc, char* argv[])
     fplog (stderr, "dd_rescue: (fatal): %s: %s\n", iname, strerror (errno));
     cleanup (); exit (22);
   };
+
   /* Overwrite? */
-  odes = open (oname, O_WRONLY, 0640);
+  /* Special case '-': stdout */
+  if (strcmp (oname, "-"))
+	odes = open (oname, O_WRONLY, 0640);
+  else odes = 0;
   if (odes > 0 && interact) {
     int a; close (odes);
     do {
-      printf ("dd_rescue: (question): %s existing %s [y/n] ?", (trunc? "Overwrite": "Write into"), oname);
-      a = toupper (fgetc (stdin)); //printf ("\n");
+      fprintf (stderr, "dd_rescue: (question): %s existing %s [y/n] ?", (trunc? "Overwrite": "Write into"), oname);
+      a = toupper (fgetc (stdin)); //fprintf (stderr, "\n");
     } while (a != 'Y' && a != 'N');
     if (a == 'N') {
-      fplog (stdout, "dd_rescue: (fatal): exit on user request!\n");
+      fplog (stderr, "dd_rescue: (fatal): exit on user request!\n");
       cleanup (); exit (23);
     }
   }
@@ -553,7 +563,7 @@ int main (int argc, char* argv[])
   }
 
   if (verbose) {
-    printinfo (stdout);
+    printinfo (stderr);
     if (log) printinfo (log);
   }
 
@@ -568,8 +578,8 @@ int main (int argc, char* argv[])
   gettimeofday (&starttime, NULL);
   memcpy (&lasttime, &starttime, sizeof(lasttime));
   if (!quiet) {
-    printf ("%s%s%s", down, down, down);
-    printstatus (stdout, 0, softbs, 0);
+    fprintf (stderr, "%s%s%s", down, down, down);
+    printstatus (stderr, 0, softbs, 0);
   }
 
   c = copyfile (maxxfer, softbs);
@@ -579,5 +589,3 @@ int main (int argc, char* argv[])
   cleanup (); exit (0);
 }
 
-
-      
