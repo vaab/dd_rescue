@@ -76,14 +76,6 @@ const char* up = "\x1b[A"; //]
 const char* down = "\n";
 const char* right = "\x1b[C"; //]
 
-/* Large file support on kernel 2.4 glibc 2.1 systems */
-/* _FILE_OFFSET_BITS=64 should take care of it */
-#if 0 && defined(__GLIBC__) && __GLIBC__ == 2 && __GLIBC_MINOR__ == 1 && defined(O_LARGEFILE)
-const unsigned int olarge = O_LARGEFILE;
-#else
-const unsigned int olarge = 0;
-#endif
-
 inline float difftimetv(const struct timeval* const t2, 
 			const struct timeval* const t1)
 {
@@ -551,7 +543,9 @@ void printhelp()
 	fprintf(stderr, "         -l logfdile name of a file to log errors and summary to (def=\"\");\n");
 	fprintf(stderr, "         -r         reverse direction copy (def=forward);\n");
 	fprintf(stderr, "         -t         truncate output file (def=no);\n");
+#ifdef O_DIRECT
 	fprintf(stderr, "         -d/D       use O_DIRECT for input/output (def=no);\n");
+#endif
 	fprintf(stderr, "         -w         abort on Write errors (def=no);\n");
 	fprintf(stderr, "         -a         spArse file writing (def=no),\n");
 	fprintf(stderr, "         -A         Always write blocks, zeroed if err (def=no);\n");
@@ -620,8 +614,10 @@ int main(int argc, char* argv[])
 			case 't': dotrunc = O_TRUNC; break;
 			case 'i': interact = 1; force = 0; break;
 			case 'f': interact = 0; force = 1; break;
+#ifdef O_DIRECT
 			case 'd': o_dir_in  = O_DIRECT; break;
 			case 'D': o_dir_out = O_DIRECT; break;
+#endif
 			case 'p': pres = 1; break;
 			case 'a': sparse = 1; nosparse = 0; break;
 			case 'A': nosparse = 1; sparse = 0; break;
@@ -697,7 +693,7 @@ int main(int argc, char* argv[])
 		cleanup(); exit(19);
 	}
 	/* Open input and output files */
-	ides = openfile(iname, O_RDONLY | olarge | o_dir_in);
+	ides = openfile(iname, O_RDONLY | o_dir_in);
 	if (ides < 0) {
 		fplog(stderr, "dd_rescue: (fatal): %s: %s\n", iname, strerror(errno));
 		cleanup(); exit(22);
@@ -706,7 +702,7 @@ int main(int argc, char* argv[])
 	/* Overwrite? */
 	/* Special case '-': stdout */
 	if (strcmp(oname, "-"))
-		odes = open(oname, O_WRONLY | olarge | o_dir_out, 0640);
+		odes = open(oname, O_WRONLY | o_dir_out, 0640);
 	else 
 		odes = 0;
 
@@ -726,7 +722,7 @@ int main(int argc, char* argv[])
 		}
 	}
 
-	odes = openfile(oname, O_WRONLY | O_CREAT | olarge | o_dir_out /*| O_EXCL*/ | dotrunc);
+	odes = openfile(oname, O_WRONLY | O_CREAT | o_dir_out /*| O_EXCL*/ | dotrunc);
 	if (odes < 0) {
 		fplog(stderr, "dd_rescue: (fatal): %s: %s\n", oname, strerror(errno));
 		cleanup(); exit(24);
