@@ -18,7 +18,7 @@
  * - Use termcap to fetch cursor up code
  */
 
-#define VERSION "0.91"
+#define VERSION "0.95"
 #define ID "$Id$"
 
 #ifndef SOFTBLOCKSIZE
@@ -44,7 +44,8 @@
 #include <sys/time.h>
 
 int softbs, hardbs;
-int maxerr, nrerr, reverse, trunc, verbose, quiet, interact;
+int maxerr, nrerr, reverse, trunc, abwrerr, sparse;
+int verbose, quiet, interact;
 char* buf;
 char *lname, *iname, *oname;
 off_t ipos, opos, xfer, lxfer, sxfer, fxfer, maxxfer;
@@ -135,6 +136,14 @@ int fplog (FILE* file, char * fmt, ...)
   return ret;
 };
 
+/* is the block zero ? */
+int blockzero (char* blk, int ln)
+{
+  char* ptr = blk;
+  while ((ptr-blk) < ln) if (*(ptr++)) return 0;
+  return 1;
+}
+
 
 /* can be invoked in two ways: bs==hardbs or bs==softbs */
 int copyfile (off_t max, int bs)
@@ -209,21 +218,27 @@ int copyfile (off_t max, int bs)
       if (rd > 0) {
 	ssize_t wr = 0;
 	errno = 0; /* should not be necessary */
-	do {
-	  wr += (err = pwrite (odes, buf+wr, rd-wr, opos+wr-reverse*toread));
-	  if (err == -1) wr++;
-	} while ((err == -1 && (errno == EINTR || errno == EAGAIN))
-		 || (errno == 0 && wr < rd && err > 0));
+	if (!sparse || !blockzero (buf, bs))
+	  do {
+	    wr += (err = pwrite (odes, buf+wr, rd-wr, opos+wr-reverse*toread));
+	    if (err == -1) wr++;
+	  } while ((err == -1 && (errno == EINTR || errno == EAGAIN))
+		   || (errno == 0 && wr < rd && err > 0));
 	if (errno) {
-	  /* Write error: Not handled .. */
-	  fplog (stderr, "dd_rescue: (fatal): %s (%.1fk): %s\n", 
+	  /* Write error: handle ? .. */
+	  fplog (stderr, "dd_rescue: (%s): %s (%.1fk): %s\n",
+		 (abwrerr? "fatal": "warning"),
 		 oname, (float)opos/1024, strerror (errno));
-	  cleanup (); exit (21);
+	  errs++;
+	  if (abwrerr) {
+		  cleanup (); exit (21);
+	  }
+	  nrerr++;
 	}
 	sxfer += wr; xfer += rd;
-	if (reverse) {ipos -= rd; opos -= wr;}
-	else {ipos += rd; opos += wr;}
-	if (rd != wr) fplog (stderr, "dd_rescue: (warning): assumption rd (%i) == wr(%i) failed!\n", rd, wr);
+	if (reverse) {ipos -= rd; opos -= rd;}
+	else {ipos += rd; opos += rd;}
+	if (rd != wr) fplog (stderr, "dd_rescue: (warning): assumption rd(%i) == wr(%i) failed!\n", rd, wr);
       } /* rd > 0 */
     } /* errno */
     if (!quiet && !(xfer % (8*softbs))) printstatus (stdout, 0, bs);
@@ -269,6 +284,8 @@ void printhelp ()
   printf ("         -l logfile name of a file to log errors and summary to (def=\"\");\n");
   printf ("         -r         reverse direction copy (def=forward);\n");
   printf ("         -t         truncate output file (def=no);\n");
+  printf ("         -w         abort on Write errors (def=no);\n");
+  printf ("         -a         spArse file writing (def=no);\n");
   printf ("         -i         interactive: ask before overwriting data (def=no);\n");
   printf ("         -q         quiet operation,\n");
   printf ("         -v         verbose operation;\n");
@@ -288,10 +305,12 @@ void printinfo (FILE* file)
   fplog (file, "dd_rescue: (info): blocksizes: soft %i, hard %i\n", softbs, hardbs);
   fplog (file, "dd_rescue: (info): starting positions: in %.1fk, out %.1fk\n",
 	  (double)ipos/1024, (double)opos/1024);
-  fplog (file, "dd_rescue: (info): logfile: %s, maxerr: %li\n",
+  fplog (file, "dd_rescue: (info): Logfile: %s, Maxerr: %li\n",
 	  (lname? lname: "(none)"), maxerr);
-  fplog (file, "dd_rescue: (info): reverse: %s, trunc: %s, interactive: %s\n",
+  fplog (file, "dd_rescue: (info): Reverse: %s, Trunc: %s, interactive: %s\n",
 	  YESNO(reverse), YESNO(trunc), YESNO(interact));
+  fplog (file, "dd_rescue: (info): abort on Write errs: %s, spArse write: %s\n",
+	  YESNO(abwrerr), YESNO(sparse));
   /*
   fplog (file, "dd_rescue: (info): verbose: %s, quiet: %s\n", 
 	  YESNO(verbose), YESNO(quiet));
@@ -301,7 +320,8 @@ void printinfo (FILE* file)
 void printreport ()
 {
   /* report */
-  if (!quiet || c) report = stdout;
+  FILE *report = 0;
+  if (!quiet || nrerr) report = stdout;
   fplog (report, "Summary for %s -> %s:\n", iname, oname);
   if (report) printf ("%s%s%s", down, down, down);
   if (report) printstatus (stdout, log, 0);
@@ -319,23 +339,26 @@ void breakhandler (int sig)
 
 int main (int argc, char* argv[])
 {
-  int c; FILE* report = 0;
+  int c;
 
   /* defaults */
   softbs = SOFTBLOCKSIZE; hardbs = HARDBLOCKSIZE;
   maxerr = 0; ipos = (off_t)-1; opos = (off_t)-1; maxxfer = 0; 
-  reverse = 0; trunc = 0; verbose = 0; quiet = 0; interact = 0;
+  reverse = 0; trunc = 0; abwrerr = 0; sparse = 0;
+  verbose = 0; quiet = 0; interact = 0;
   lname = 0; iname = 0; oname = 0;
 
   /* Initialization */
   sxfer = 0; fxfer = 0; lxfer = 0; xfer = 0;
   ides = -1; odes = -1; log = 0; nrerr = 0; buf = 0;
 
-  while ((c = getopt (argc, argv, ":rtihqvVb:B:m:e:s:S:l:")) != -1) {
+  while ((c = getopt (argc, argv, ":rtihqvVwab:B:m:e:s:S:l:")) != -1) {
     switch (c) {
     case 'r': reverse = 1; break;
     case 't': trunc = O_TRUNC; break;
     case 'i': interact = 1; break;
+    case 'a': sparse = 1 ; break;
+    case 'w': abwrerr = 1; break;
     case 'h': printhelp (); exit(0); break;
     case 'V': printversion (); exit(0); break;
     case 'v': quiet = 0; verbose = 1; break;
@@ -399,6 +422,7 @@ int main (int argc, char* argv[])
     fplog (stderr, "dd_rescue: (fatal): allocation of buffer failed!\n");
     cleanup (); exit (18);
   }
+  memset (buf, 0, softbs);
 
   /* Open input and output files */
   ides = openfile (iname, O_RDONLY);
