@@ -16,6 +16,7 @@
 /*
  * TODO:
  * - Use termcap to fetch cursor up code
+ * - Optimized blockzero ()
  */
 
 #ifndef VERSION
@@ -47,6 +48,7 @@
 #include <signal.h>
 #include <time.h>
 #include <sys/time.h>
+#include <sys/stat.h>
 
 int softbs, hardbs;
 int maxerr, nrerr, reverse, trunc, abwrerr, sparse, nosparse;
@@ -55,7 +57,7 @@ char* buf;
 char *lname, *iname, *oname;
 off_t ipos, opos, xfer, lxfer, sxfer, fxfer, maxxfer;
 
-int ides, odes;
+int ides, odes, identical;
 FILE *log;
 struct timeval starttime, lasttime, currenttime;
 struct timezone tz;
@@ -69,6 +71,23 @@ inline float difftimetv (struct timeval* t2, struct timeval *t1)
 {
   return (float) (t2->tv_sec - t1->tv_sec) + 1e-6 * (float)(t2->tv_usec - t1->tv_usec);
 }
+
+
+int check_identical (char* in, char* on)
+{
+  int err;
+  struct stat istat, ostat;
+  errno = 0;
+  if (strcmp (in, on) == 0) return 1;
+  err -= stat (in, &istat);
+  if (err) return 0;
+  err -= stat (oname, &istat); errno = 0;
+  if (!err 
+      && istat->st_ino == ostat->st_ino && istat->st_dev == ostat->st_dev)
+    return 1;
+  return 0;
+}  
+
 
 int openfile (char* fname, int flags)
 {
@@ -461,7 +480,8 @@ int main (int argc, char* argv[])
   }
   memset (buf, 0, softbs);
 
-  if (strcmp (iname, oname) == 0 && trunc && !force) {
+  identical = check_identical (iname, oname);
+  if (identical && trunc && !force) {
     fplog (stderr, "dd_rescue: (fatal): infile and outfile are identical and trunc turned on!\n");
     cleanup (); exit (19);
   }
@@ -520,7 +540,7 @@ int main (int argc, char* argv[])
   /* if opos not set, assume same position */
   if (opos == (off_t)-1) opos = ipos;
 
-  if (strcmp (iname, oname) == 0) {
+  if (identical) {
     fplog (stderr, "dd_rescue: (warning): infile and outfile are identical!\n");
     if (opos > ipos && !reverse && !force) {
       fplog (stderr, "dd_rescue: (warning): turned on reverse, as ipos < opos!\n");
