@@ -33,7 +33,7 @@
 #endif
 
 #define _GNU_SOURCE
-//#define _LARGEFILE64_SOURCE
+#define _LARGEFILE_SOURCE
 #define _FILE_OFFSET_BITS 64
 
 #include <stdio.h>
@@ -521,7 +521,7 @@ int main (int argc, char* argv[])
     cleanup (); exit (19);
   }
   /* Open input and output files */
-  ides = openfile (iname, O_RDONLY);
+  ides = openfile (iname, O_RDONLY | O_LARGEFILE);
   if (ides < 0) {
     fplog (stderr, "dd_rescue: (fatal): %s: %s\n", iname, strerror (errno));
     cleanup (); exit (22);
@@ -530,10 +530,11 @@ int main (int argc, char* argv[])
   /* Overwrite? */
   /* Special case '-': stdout */
   if (strcmp (oname, "-"))
-	odes = open (oname, O_WRONLY, 0640);
+	odes = open (oname, O_WRONLY | O_LARGEFILE, 0640);
   else odes = 0;
+  if (odes > 0) close (odes);
   if (odes > 0 && interact) {
-    int a; close (odes);
+    int a;
     do {
       fprintf (stderr, "dd_rescue: (question): %s existing %s [y/n] ?", (trunc? "Overwrite": "Write into"), oname);
       a = toupper (fgetc (stdin)); //fprintf (stderr, "\n");
@@ -544,7 +545,7 @@ int main (int argc, char* argv[])
     }
   }
 
-  odes = openfile (oname, O_WRONLY | O_CREAT /*| O_EXCL*/ | trunc);
+  odes = openfile (oname, O_WRONLY | O_CREAT | O_LARGEFILE /*| O_EXCL*/ | trunc);
   if (odes < 0) {
     fplog (stderr, "dd_rescue: (fatal): %s: %s\n", oname, strerror (errno));
     cleanup (); exit (24);
