@@ -109,10 +109,12 @@ void doprint (FILE* file, int bs, clock_t cl, float t1, float t2)
 void printstatus (FILE* file1, FILE* file2, int bs)
 {
   float t1, t2; 
-  clock_t cl = clock ();
+  clock_t cl;
+  fsync (odes);
   gettimeofday (&currenttime, NULL);
   t1 = difftimetv (&currenttime, &starttime);
   t2 = difftimetv (&currenttime, &lasttime);
+  cl = clock ();
 
   if (file1 == stderr || file1 == stdout) 
     fprintf (file1, "%s%s%s", up, up, up);
