@@ -21,7 +21,6 @@
  * - Use termcap to fetch cursor up/down codes
  * - Better handling of write errors: also try sub blocks
  * - Support non-seekable in/output
- * - Optionally support copying of attributes (ownership, perms)
  */
 
 #ifndef VERSION
