@@ -64,7 +64,7 @@ off_t ipos, opos, xfer, lxfer, sxfer, fxfer, maxxfer;
 int ides, odes, identical;
 char i_chr, o_chr;
 
-FILE *logf;
+FILE *logfd;
 struct timeval starttime, lasttime, currenttime;
 struct timezone tz;
 clock_t startclock;
@@ -166,7 +166,7 @@ void doprint(FILE* const file, const int bs, const clock_t cl,
 			100.0*(cl-startclock)/(CLOCKS_PER_SEC*t1));
 }
 
-/* Write to file and simultaneously log to logfile, if exsiting */
+/* Write to file and simultaneously log to logfdile, if exsiting */
 int fplog(FILE* const file, const char * const fmt, ...)
 {
 	int ret = 0;
@@ -175,9 +175,9 @@ int fplog(FILE* const file, const char * const fmt, ...)
 	if (file) 
 		ret = vfprintf(file, fmt, vl);
 	va_end(vl);
-	if (logf) {
+	if (logfd) {
 		va_start(vl, fmt);
-		ret = vfprintf(logf, fmt, vl);
+		ret = vfprintf(logfd, fmt, vl);
 		va_end(vl);
 	}
 	return ret;
@@ -219,7 +219,7 @@ void printreport()
 	fplog(report, "Summary for %s -> %s:\n", iname, oname);
 	if (report)
 		fprintf(stderr, "%s%s%s", down, down, down);
-	printstatus(report, logf, 0, 1);
+	printstatus(report, logfd, 0, 1);
 }
 
 void cleanup()
@@ -231,8 +231,8 @@ void cleanup()
 	}
 	if (ides != -1)
 		close(ides);
-	if (logf)
-		fclose(logf);
+	if (logfd)
+		fclose(logfd);
 	if (buf)
 		free(buf);
 }
@@ -324,7 +324,7 @@ int copyfile(const off_t max, const int bs)
 		/* READ ERROR */
 		if (rd < toread/* && errno*/) {
 			/* Read error occurred: Print warning */
-			printstatus(stderr, logf, bs, 1); errs++;
+			printstatus(stderr, logfd, bs, 1); errs++;
 			/* Some errnos are fatal */
 			if (errno == ESPIPE || errno == EPERM || errno == ENXIO || errno == ENODEV) {
 				fplog(stderr, "dd_rescue: (warning): %s (%.1fk): %s!\n", 
@@ -497,7 +497,7 @@ void printhelp()
 	fprintf(stderr, "         -B hardbs  fallback block size in case of errs (def=%i);\n", HARDBLOCKSIZE );
 	fprintf(stderr, "         -e maxerr  exit after maxerr errors (def=0=infinite);\n");
 	fprintf(stderr, "         -m maxxfer maximum amount of data to be transfered (def=0=inf);\n");
-	fprintf(stderr, "         -l logfile name of a file to log errors and summary to (def=\"\");\n");
+	fprintf(stderr, "         -l logfdile name of a file to log errors and summary to (def=\"\");\n");
 	fprintf(stderr, "         -r         reverse direction copy (def=forward);\n");
 	fprintf(stderr, "         -t         truncate output file (def=no);\n");
 	fprintf(stderr, "         -w         abort on Write errors (def=no);\n");
@@ -558,7 +558,7 @@ int main(int argc, char* argv[])
 
 	/* Initialization */
 	sxfer = 0; fxfer = 0; lxfer = 0; xfer = 0;
-	ides = -1; odes = -1; logf = 0; nrerr = 0; buf = 0;
+	ides = -1; odes = -1; logfd = 0; nrerr = 0; buf = 0;
 	i_chr = 0; o_chr = 0;
 
 	while ((c = getopt(argc, argv, ":rtfihqvVwaAb:B:m:e:s:S:l:")) != -1) {
@@ -609,7 +609,7 @@ int main(int argc, char* argv[])
 
 	if (lname) {
 		c = openfile(lname, O_WRONLY | O_CREAT /*| O_EXCL*/);
-		logf = fdopen(c, "a");
+		logfd = fdopen(c, "a");
 	}
 
 	/* sanity checks */
@@ -730,8 +730,8 @@ int main(int argc, char* argv[])
 
 	if (verbose) {
 		printinfo(stderr);
-		if (logf)
-			printinfo(logf);
+		if (logfd)
+			printinfo(logfd);
 	}
 
 	/* Install signal handler */
