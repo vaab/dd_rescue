@@ -93,24 +93,31 @@ void cleanup ()
   if (buf) free (buf);
 }
 
-void doprint (FILE* file, int bs, clock_t cl, float t1, float t2)
+void doprint (FILE* file, int bs, clock_t cl, float t1, float t2, int sync)
 {
   fprintf (file, "dd_rescue: (info): ipos: %11.1fk, opos: %11.1fk, xferd: %11.1fk\n",
 	   (float)ipos/1024, (float)opos/1024, (float)xfer/1024);
   fprintf (file, "             %s  %s  errs: %6i, errxfer: %11.1fk, succxfer: %11.1fk\n",
 	   (reverse? "-": " "), (bs==hardbs? "*": " "), nrerr, 
 	   (float)fxfer/1024, (float)sxfer/1024);
+  if (sync)
   fprintf (file, "              curr.rate: %8.0fkB/s, avg.rate: %8.0fkB/s, avg.load: %4.1f\%\n",
 	   (float)(xfer-lxfer)/(t2*1024),
 	   (float)xfer/(t1*1024),
 	   100*(cl-startclock)/(CLOCKS_PER_SEC*t1));
+  else
+  fprintf (file, "              curr.rate:         kB/s, avg.rate: %8.0fkB/s, avg.load: %4.1f\%\n",
+	   (float)(xfer-lxfer)/(t2*1024),
+	   (float)xfer/(t1*1024),
+	   100*(cl-startclock)/(CLOCKS_PER_SEC*t1));
+
 }
 
-void printstatus (FILE* file1, FILE* file2, int bs)
+void printstatus (FILE* file1, FILE* file2, int bs, int sync)
 {
   float t1, t2; 
   clock_t cl;
-  fsync (odes);
+  if (sync) fsync (odes);
   gettimeofday (&currenttime, NULL);
   t1 = difftimetv (&currenttime, &starttime);
   t2 = difftimetv (&currenttime, &lasttime);
@@ -177,7 +184,7 @@ int copyfile (off_t max, int bs)
     if (!errno && rd == 0) break;
     if (errno) {
       /* Read error occurred: Print warning */
-      printstatus (stdout, log, bs); errs++;
+      printstatus (stdout, log, bs, 1); errs++;
       /* Some errnos are fatal */
       if (errno == ESPIPE) {
 	fplog (stderr, "dd_rescue: (warning): %s (%.1fk): %s!\n", 
@@ -248,7 +255,8 @@ int copyfile (off_t max, int bs)
 	if (rd != wr && !sparse) fplog (stderr, "dd_rescue: (warning): assumption rd(%i) == wr(%i) failed!\n", rd, wr);
       } /* rd > 0 */
     } /* errno */
-    if (!quiet && !(xfer % (8*softbs))) printstatus (stdout, 0, bs);
+    //if (!quiet && !(xfer % (8*softbs))) printstatus (stdout, 0, bs, 0);
+    if (!quiet && !(xfer % (128*softbs))) printstatus (stdout, 0, bs, 1);
   } /* remain */
   return errs;
 }
@@ -331,7 +339,7 @@ void printreport ()
   if (!quiet || nrerr) report = stdout;
   fplog (report, "Summary for %s -> %s:\n", iname, oname);
   if (report) printf ("%s%s%s", down, down, down);
-  if (report) printstatus (stdout, log, 0);
+  if (report) printstatus (stdout, log, 0, 1);
 }
 
 void breakhandler (int sig)
