@@ -20,6 +20,7 @@ MYDIR = dd_rescue
 TARGETS = dd_rescue
 OBJECTS = dd_rescue.o
 DOCDIR = $(prefix)/share/doc/packages
+INSTASROOT = -o root -g root
 
 default: $(TARGETS)
 
@@ -37,6 +38,6 @@ dist: distclean
 
 install: $(TARGETS)
 	mkdir -p $(INSTALLDIR)
-	$(INSTALL) $(INSTALLFLAGS) -o root -g root -m 755 $(TARGETS) $(INSTALLDIR)
-	#$(INSTALL) -o root -g root -m 755 -d $(DOCDIR)/dd_rescue
-	#$(INSTALL) -o root -g root -m 644 README.dd_rescue $(DOCDIR)/dd_rescue/
+	$(INSTALL) $(INSTALLFLAGS) $(INSTASROOT) -m 755 $(TARGETS) $(INSTALLDIR)
+	#$(INSTALL) $(INSTASROOT) -m 755 -d $(DOCDIR)/dd_rescue
+	#$(INSTALL) $(INSTASROOT) -g root -m 644 README.dd_rescue $(DOCDIR)/dd_rescue/
