@@ -430,9 +430,6 @@ int main (int argc, char* argv[])
     cleanup (); exit (5);
   }
     
-  if (strcmp (iname, oname) == 0)
-    fplog (stderr, "dd_rescue: (warning): names of input and ouput file are identical!\n");
-  
   /* Have those been set by cmdline params? */
   if (ipos == (off_t)-1) ipos = 0;
 
@@ -491,6 +488,18 @@ int main (int argc, char* argv[])
   }
   /* if opos not set, assume same position */
   if (opos == (off_t)-1) opos = ipos;
+
+  if (strcmp (iname, oname) == 0) {
+    fplog (stderr, "dd_rescue: (warning): infile and outfile are identical!\n");
+    if (opos > ipos && !reverse) {
+      fplog (stderr, "dd_rescue: (warning): turned on reverse, as ipos < opos!\n");
+      reverse = 1;
+    }
+    if (opos < ipos && reverse) {
+      fplog (stderr, "dd_rescue: (warning): turned off reverse, as opos < ipos!\n");
+      reverse = 0;
+    }
+  }
 
   if (verbose) {
     printinfo (stdout);
