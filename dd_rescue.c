@@ -324,7 +324,8 @@ int copyfile(const off_t max, const int bs)
 		/* READ ERROR */
 		if (rd < toread/* && errno*/) {
 			/* Read error occurred: Print warning */
-			printstatus(stderr, logfd, bs, 1); errs++;
+			printstatus(stderr, logfd, bs, 1); 
+			errs++;
 			/* Some errnos are fatal */
 			if (errno == ESPIPE || errno == EPERM || errno == ENXIO || errno == ENODEV) {
 				fplog(stderr, "dd_rescue: (warning): %s (%.1fk): %s!\n", 
