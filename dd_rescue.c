@@ -63,7 +63,7 @@ clock_t startclock;
 
 char* up = "\x1b[A"; //] 
 char* down = "\n";
-char* right = "\x1b[E"; //]
+char* right = "\x1b[C"; //]
 
 inline float difftimetv (struct timeval* t2, struct timeval *t1)
 {
@@ -95,19 +95,19 @@ void cleanup ()
 
 void doprint (FILE* file, int bs, clock_t cl, float t1, float t2, int sync)
 {
-  fprintf (file, "dd_rescue: (info): ipos: %11.1fk, opos: %11.1fk, xferd: %11.1fk\n",
+  fprintf (file, "dd_rescue: (info): ipos:%12.1fk, opos:%12.1fk, xferd:%12.1fk\n",
 	   (float)ipos/1024, (float)opos/1024, (float)xfer/1024);
-  fprintf (file, "             %s  %s  errs: %6i, errxfer: %11.1fk, succxfer: %11.1fk\n",
+  fprintf (file, "             %s  %s  errs:%7i, errxfer:%12.1fk, succxfer:%12.1fk\n",
 	   (reverse? "-": " "), (bs==hardbs? "*": " "), nrerr, 
 	   (float)fxfer/1024, (float)sxfer/1024);
   if (sync || (file != stdin && file != stdout) )
-  fprintf (file, "              curr.rate: %8.0fkB/s, avg.rate: %8.0fkB/s, avg.load: %4.1f\%\n",
+  fprintf (file, "             +curr.rate:%9.0fkB/s, avg.rate:%9.0fkB/s, avg.load:%5.1f\%\n",
 	   (float)(xfer-lxfer)/(t2*1024),
 	   (float)xfer/(t1*1024),
 	   100*(cl-startclock)/(CLOCKS_PER_SEC*t1));
   else
-  fprintf (file, "              curr.rate: %s%s%s%s%s%s%s%skB/s, avg.rate: %8.0fkB/s, avg.load: %4.1f\%\n",
-	   right, right, right, right, right, right, right, right, 
+  fprintf (file, "             -curr.rate:%s%s%s%s%s%s%s%s%skB/s, avg.rate:%9.0fkB/s, avg.load:%5.1f\%\n",
+	   right, right, right, right, right, right, right, right, right,
 	   (float)xfer/(t1*1024),
 	   100*(cl-startclock)/(CLOCKS_PER_SEC*t1));
 
@@ -255,8 +255,10 @@ int copyfile (off_t max, int bs)
 	if (rd != wr && !sparse) fplog (stderr, "dd_rescue: (warning): assumption rd(%i) == wr(%i) failed!\n", rd, wr);
       } /* rd > 0 */
     } /* errno */
-    if (!quiet && !(xfer % (16*softbs))) printstatus (stdout, 0, bs, 0);
-    if (!quiet && !(xfer % (256*softbs))) printstatus (stdout, 0, bs, 1);
+    if (!quiet && !(xfer % (16*softbs)) && (xfer % (512*softbs))) 
+      printstatus (stdout, 0, bs, 0);
+    if (!quiet && !(xfer % (512*softbs))) 
+      printstatus (stdout, 0, bs, 1);
   } /* remain */
   return errs;
 }
