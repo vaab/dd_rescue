@@ -49,7 +49,7 @@
 #include <sys/time.h>
 
 int softbs, hardbs;
-int maxerr, nrerr, reverse, trunc, abwrerr, sparse;
+int maxerr, nrerr, reverse, trunc, abwrerr, sparse, nosparse;
 int verbose, quiet, interact, force;
 char* buf;
 char *lname, *iname, *oname;
@@ -161,6 +161,41 @@ int blockzero (char* blk, int ln)
 }
 
 
+ssize_t readblock (int toread)
+{
+  ssize_t err, rd = 0;
+  errno = 0; /* should not be necessary */
+  do {
+    rd += (err = pread (ides, buf+rd, toread-rd, ipos+rd-reverse*toread));
+    if (err == -1) rd++;
+  } while ((err == -1 && (errno == EINTR || errno == EAGAIN))
+	   || (errno == 0 && rd < toread && err > 0));
+  //if (rd < toread) memset (buf+rd, 0, toread-rd);
+  return (err == -1? err: rd);
+}
+
+ssize_t writeblock (int towrite)
+{
+  ssize_t err, wr = 0;
+  errno = 0; /* should not be necessary */
+  do {
+    wr += (err = pwrite (odes, buf+wr, towrite-wr, opos+wr-reverse*towrite));
+    if (err == -1) wr++;
+  } while ((err == -1 && (errno == EINTR || errno == EAGAIN))
+	   || (errno == 0 && wr < towrite && err > 0));
+  if (errno) {
+    /* Write error: handle ? .. */
+    fplog (stderr, "dd_rescue: (%s): %s (%.1fk): %s\n",
+	   (abwrerr? "fatal": "warning"),
+	   oname, (float)opos/1024, strerror (errno));
+    if (abwrerr) {
+      cleanup (); exit (21);
+    }
+    nrerr++;
+  }
+  return (err == -1? err: wr);
+}
+
 /* can be invoked in two ways: bs==hardbs or bs==softbs */
 int copyfile (off_t max, int bs)
 {
@@ -175,13 +210,10 @@ int copyfile (off_t max, int bs)
       if (toread > ipos) toread = ipos;
       if (toread > opos) toread = opos;
     }
-    /* memset (buf, 0, bs); */
-    errno = 0; /* should not be necessary */
-    do {
-      rd += (err = pread (ides, buf+rd, toread-rd, ipos+rd-reverse*toread));
-      if (err == -1) rd++;
-    } while ((err == -1 && (errno == EINTR || errno == EAGAIN))
-	     || (errno == 0 && rd < toread && err > 0));
+
+    if (nosparse && bs == hardbs) memset (buf, 0, bs);
+    rd = readblock (toread);
+
     /* EOF */
     if (!errno && rd == 0) break;
     if (errno) {
@@ -207,6 +239,7 @@ int copyfile (off_t max, int bs)
 	}
 	printf ("%s%s%s", down, down, down);
 	/* advance */
+	if (nosparse) errs += (writeblock (toread) == -1? 1: 0);
 	fxfer += toread; xfer += toread;
 	if (reverse) {ipos -= toread; opos -= toread;}
 	else {ipos += toread; opos += toread;}
@@ -233,24 +266,8 @@ int copyfile (off_t max, int bs)
       
       if (rd > 0) {
 	ssize_t wr = 0;
-	errno = 0; /* should not be necessary */
 	if (!sparse || !blockzero (buf, bs))
-	  do {
-	    wr += (err = pwrite (odes, buf+wr, rd-wr, opos+wr-reverse*toread));
-	    if (err == -1) wr++;
-	  } while ((err == -1 && (errno == EINTR || errno == EAGAIN))
-		   || (errno == 0 && wr < rd && err > 0));
-	if (errno) {
-	  /* Write error: handle ? .. */
-	  fplog (stderr, "dd_rescue: (%s): %s (%.1fk): %s\n",
-		 (abwrerr? "fatal": "warning"),
-		 oname, (float)opos/1024, strerror (errno));
-	  errs++;
-	  if (abwrerr) {
-		  cleanup (); exit (21);
-	  }
-	  nrerr++;
-	}
+	  errs += ((wr = writeblock (rd)) == -1? 1: 0);
 	sxfer += wr; xfer += rd;
 	if (reverse) {ipos -= rd; opos -= rd;}
 	else {ipos += rd; opos += rd;}
@@ -304,7 +321,8 @@ void printhelp ()
   printf ("         -r         reverse direction copy (def=forward);\n");
   printf ("         -t         truncate output file (def=no);\n");
   printf ("         -w         abort on Write errors (def=no);\n");
-  printf ("         -a         spArse file writing (def=no);\n");
+  printf ("         -a         spArse file writing (def=no),\n");
+  printf ("         -A         Always write blocks, zeroed if err (def=no);\n");
   printf ("         -i         interactive: ask before overwriting data (def=no);\n");
   printf ("         -f         force: skip some sanity checks (def=no);\n");
   printf ("         -q         quiet operation,\n");
@@ -321,16 +339,16 @@ void printhelp ()
 void printinfo (FILE* file)
 {
   fplog (file, "dd_rescue: (info): about to transfer %.1f kBytes from %s to %s\n",
-	  (double)maxxfer/1024, iname, oname);
+	 (double)maxxfer/1024, iname, oname);
   fplog (file, "dd_rescue: (info): blocksizes: soft %i, hard %i\n", softbs, hardbs);
   fplog (file, "dd_rescue: (info): starting positions: in %.1fk, out %.1fk\n",
-	  (double)ipos/1024, (double)opos/1024);
+	 (double)ipos/1024, (double)opos/1024);
   fplog (file, "dd_rescue: (info): Logfile: %s, Maxerr: %li\n",
-	  (lname? lname: "(none)"), maxerr);
+	 (lname? lname: "(none)"), maxerr);
   fplog (file, "dd_rescue: (info): Reverse: %s, Trunc: %s, interactive: %s\n",
-	  YESNO(reverse), YESNO(trunc), YESNO(interact));
+	 YESNO(reverse), YESNO(trunc), YESNO(interact));
   fplog (file, "dd_rescue: (info): abort on Write errs: %s, spArse write: %s\n",
-	  YESNO(abwrerr), YESNO(sparse));
+	 YESNO(abwrerr), (sparse? "yes": (nosparse? "never": "if err")));
   /*
   fplog (file, "dd_rescue: (info): verbose: %s, quiet: %s\n", 
 	  YESNO(verbose), YESNO(quiet));
@@ -364,7 +382,7 @@ int main (int argc, char* argv[])
   /* defaults */
   softbs = SOFTBLOCKSIZE; hardbs = HARDBLOCKSIZE;
   maxerr = 0; ipos = (off_t)-1; opos = (off_t)-1; maxxfer = 0; 
-  reverse = 0; trunc = 0; abwrerr = 0; sparse = 0;
+  reverse = 0; trunc = 0; abwrerr = 0; sparse = 0; nosparse = 1;
   verbose = 0; quiet = 0; interact = 0; force = 0;
   lname = 0; iname = 0; oname = 0;
 
@@ -372,13 +390,14 @@ int main (int argc, char* argv[])
   sxfer = 0; fxfer = 0; lxfer = 0; xfer = 0;
   ides = -1; odes = -1; log = 0; nrerr = 0; buf = 0;
 
-  while ((c = getopt (argc, argv, ":rtfihqvVwab:B:m:e:s:S:l:")) != -1) {
+  while ((c = getopt (argc, argv, ":rtfihqvVwaAb:B:m:e:s:S:l:")) != -1) {
     switch (c) {
     case 'r': reverse = 1; break;
     case 't': trunc = O_TRUNC; break;
     case 'i': interact = 1; force = 0; break;
     case 'f': interact = 0; force = 1; break;
-    case 'a': sparse = 1 ; break;
+    case 'a': sparse = 1; nosparse = 0; break;
+    case 'A': nosparse = 1; sparse = 0; break;
     case 'w': abwrerr = 1; break;
     case 'h': printhelp (); exit(0); break;
     case 'V': printversion (); exit(0); break;
@@ -486,7 +505,7 @@ int main (int argc, char* argv[])
     if (opos == (off_t)-1) opos = ipos;
     /* if explicitly set to zero, assume end of _existing_ file */
     if (opos == 0) {
-      opos == lseek (odes, opos, SEEK_END);
+      opos = lseek (odes, opos, SEEK_END);
       if (opos == (off_t)-1) {
 	fprintf (stderr, "dd_rescue: (fatal): could not seek to end of file %s!\n", oname);
 	perror (""); cleanup (); exit (19);

@@ -2,7 +2,7 @@
 # (c) garloff@suse.de, 99/10/09, GNU GPL
 # $Id$
 
-VERSION = 0.97
+VERSION = 0.98
 
 CC = gcc
 CFLAGS = -O2 -Wall -g $(EXTRA_CFLAGS)
