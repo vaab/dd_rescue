@@ -516,7 +516,7 @@ int main (int argc, char* argv[])
   startclock = clock ();
   gettimeofday (&starttime, NULL);
   memcpy (&lasttime, &starttime, sizeof(lasttime));
-  if (!quiet) printf ("%ss%s%s", down, down, down);
+  if (!quiet) printf ("%s%s%s", down, down, down);
 
   c = copyfile (maxxfer, softbs);
   
