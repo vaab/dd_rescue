@@ -29,7 +29,7 @@
 #define ID "$Id$"
 
 #ifndef SOFTBLOCKSIZE
-# define SOFTBLOCKSIZE 16384
+# define SOFTBLOCKSIZE 65536
 #endif
 
 #ifndef HARDBLOCKSIZE

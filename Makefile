@@ -2,12 +2,13 @@
 # (c) garloff@suse.de, 99/10/09, GNU GPL
 # $Id$
 
-VERSION = 1.03
+VERSION = 1.04
 
 DESTDIR = 
 
 CC = gcc
-CFLAGS = -O2 -Wall -g $(EXTRA_CFLAGS)
+RPM_OPT_FLAGS = -O2 -Wall -g
+CFLAGS = $(RPM_OPT_FLAGS) $(EXTRA_CFLAGS)
 DEFINES = -DVERSION=\"$(VERSION)\"
 INSTALL = install
 INSTALLFLAGS = -s
