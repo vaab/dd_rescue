@@ -158,12 +158,12 @@ void doprint(FILE* const file, const int bs, const clock_t cl,
 		fprintf(file, "             +curr.rate:%9.0fkB/s, avg.rate:%9.0fkB/s, avg.load:%5.1f%%\n",
 			(float)(xfer-lxfer)/(t2*1024),
 			(float)xfer/(t1*1024),
-			100*(cl-startclock)/(CLOCKS_PER_SEC*t1));
+			100.0*(cl-startclock)/(CLOCKS_PER_SEC*t1));
 	else
 		fprintf(file, "             -curr.rate:%s%s%s%s%s%s%s%s%skB/s, avg.rate:%9.0fkB/s, avg.load:%5.1f%%\n",
 			right, right, right, right, right, right, right, right, right,
 			(float)xfer/(t1*1024),
-			100*(cl-startclock)/(CLOCKS_PER_SEC*t1));
+			100.0*(cl-startclock)/(CLOCKS_PER_SEC*t1));
 }
 
 /* Write to file and simultaneously log to logfile, if exsiting */
@@ -183,13 +183,15 @@ int fplog(FILE* const file, const char * const fmt, ...)
 	return ret;
 }
 
-void printstatus (FILE* const file1, FILE* const file2, 
-		  const int bs, const int sync)
+void printstatus(FILE* const file1, FILE* const file2, 
+		 const int bs, const int sync)
 {
 	float t1, t2; 
 	clock_t cl;
+
 	if (sync) 
 		fsync(odes);
+
 	gettimeofday(&currenttime, NULL);
 	t1 = difftimetv(&currenttime, &starttime);
 	t2 = difftimetv(&currenttime, &lasttime);
@@ -213,14 +215,11 @@ void printstatus (FILE* const file1, FILE* const file2,
 void printreport()
 {
 	/* report */
-	FILE *report = 0;
-	if (!quiet || nrerr) 
-		report = stderr;
+	FILE *report = (!quiet || nrerr)? stderr: 0;
 	fplog(report, "Summary for %s -> %s:\n", iname, oname);
-	if (report) {
-	       fprintf(stderr, "%s%s%s", down, down, down);
-	       printstatus(stderr, log, 0, 1);
-	}
+	if (report)
+		fprintf(stderr, "%s%s%s", down, down, down);
+	printstatus(report, log, 0, 1);
 }
 
 void cleanup()
