@@ -69,6 +69,13 @@ const char* up = "\x1b[A"; //]
 const char* down = "\n";
 const char* right = "\x1b[C"; //]
 
+/* Large file support on kernel 2.4 glibc 2.1 systems */
+#if defined(__GLIBC__) && __GLIBC__ == 2 && __GLIBC_MINOR__ == 1 && defined(O_LARGEFILE)
+const unsigned int olarge = O_LARGEFILE;
+#else
+const unsigned int olarge = 0;
+#endif
+
 inline float difftimetv (const struct timeval* const t2, 
 			 const struct timeval* const t1)
 {
@@ -521,7 +528,7 @@ int main (int argc, char* argv[])
     cleanup (); exit (19);
   }
   /* Open input and output files */
-  ides = openfile (iname, O_RDONLY | O_LARGEFILE);
+  ides = openfile (iname, O_RDONLY | olarge);
   if (ides < 0) {
     fplog (stderr, "dd_rescue: (fatal): %s: %s\n", iname, strerror (errno));
     cleanup (); exit (22);
@@ -530,7 +537,7 @@ int main (int argc, char* argv[])
   /* Overwrite? */
   /* Special case '-': stdout */
   if (strcmp (oname, "-"))
-	odes = open (oname, O_WRONLY | O_LARGEFILE, 0640);
+	odes = open (oname, O_WRONLY | olarge, 0640);
   else odes = 0;
   if (odes > 0) close (odes);
   if (odes > 0 && interact) {
@@ -545,7 +552,7 @@ int main (int argc, char* argv[])
     }
   }
 
-  odes = openfile (oname, O_WRONLY | O_CREAT | O_LARGEFILE /*| O_EXCL*/ | trunc);
+  odes = openfile (oname, O_WRONLY | O_CREAT | olarge /*| O_EXCL*/ | trunc);
   if (odes < 0) {
     fplog (stderr, "dd_rescue: (fatal): %s: %s\n", oname, strerror (errno));
     cleanup (); exit (24);
