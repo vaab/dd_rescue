@@ -16,7 +16,6 @@
 /*
  * TODO:
  * - Use termcap to fetch cursor up code
- * - Optimized blockzero ()
  */
 
 #ifndef VERSION
@@ -200,10 +199,11 @@ int fplog (FILE* file, char * fmt, ...)
 };
 
 /* is the block zero ? */
-int blockzero (char* blk, int ln)
+int blockzero (const char* blk, const int ln)
 {
-  char* ptr = blk;
-  while ((ptr-blk) < ln) if (*(ptr++)) return 0;
+  unsigned long* ptr = (unsigned int*)blk;
+  while ((ptr-blk) < ln/sizeof(long)) 
+	if (*(ptr++)) return 0;
   return 1;
 }
 
@@ -246,10 +246,12 @@ ssize_t writeblock (int towrite)
 /* can be invoked in two ways: bs==hardbs or bs==softbs */
 int copyfile (off_t max, int bs)
 {
-  int errs = 0;
+  int errs = 0; errno = 0;
   /* expand file to the right length */
   if (!o_chr) pwrite (odes, buf, 0, opos);
-  while ((!max || (max-xfer > 0)) && ((!reverse) || (ipos > 0 && opos > 0))) {
+  while ((errno != -ENOSPC) && 
+	 (!max || (max-xfer > 0)) 
+	 && ((!reverse) || (ipos > 0 && opos > 0))) {
     int err;
     ssize_t rd = 0;
     ssize_t toread = ((max && max-xfer < bs)? (max-xfer): bs);
@@ -339,6 +341,7 @@ off_t readint (char* ptr)
   case 'b': res *= 512; break;
   case 'k': res *= 1024; break;
   case 'M': res *= 1024*1024; break;
+  case 'G': res *= 1024*1024*1024; break;
   case ' ':
   case '\0': break;
   default:
@@ -376,7 +379,7 @@ void printhelp ()
   fprintf (stderr, "         -v         verbose operation;\n");
   fprintf (stderr, "         -V         display version and exit;\n");
   fprintf (stderr, "         -h         display this help and exit.\n");
-  fprintf (stderr, "Note: Sizes may be given in units b(=512), k(=1024) or M(=1024*1024) bytes\n");
+  fprintf (stderr, "Note: Sizes may be given in units b(=512), k(=1024), M(=1024^2) or G(1024^3) bytes\n");
   fprintf (stderr, "This program is useful to rescue data in case of I/O errors, because\n");
   fprintf (stderr, " it does not necessarily abort or truncate the output.\n");
 }
