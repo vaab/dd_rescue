@@ -84,24 +84,29 @@ const unsigned int olarge = 0;
 inline float difftimetv (const struct timeval* const t2, 
 			 const struct timeval* const t1)
 {
-  return (float) (t2->tv_sec - t1->tv_sec) + 1e-6 * (float)(t2->tv_usec - t1->tv_usec);
+	return  (float) (t2->tv_sec  - t1->tv_sec ) +
+		(float) (t2->tv_usec - t1->tv_usec) * 1e-6;
 }
 
 
 int check_identical (const char* const in, const char* const on)
 {
-  int err = 0;
-  struct stat istat, ostat;
-  errno = 0;
-  if (strcmp (in, on) == 0) return 1;
-  err -= stat (in, &istat);
-  if (err) return 0;
-  err -= stat (on, &istat); errno = 0;
-  if (!err 
-      && istat.st_ino == ostat.st_ino && istat.st_dev == ostat.st_dev)
-    return 1;
-  return 0;
-}  
+	int err = 0;
+	struct stat istat, ostat;
+	errno = 0;
+	if (strcmp (in, on) == 0) 
+		return 1;
+	err -= stat (in, &istat);
+	if (err)
+	       	return 0;
+	err -= stat (on, &ostat);
+	errno = 0;
+	if (!err &&
+	    istat.st_ino == ostat.st_ino &&
+	    istat.st_dev == ostat.st_dev)
+		return 1;
+	return 0;
+}
 
 
 int openfile (const char* const fname, const int flags)
