@@ -58,6 +58,8 @@ char *lname, *iname, *oname;
 off_t ipos, opos, xfer, lxfer, sxfer, fxfer, maxxfer;
 
 int ides, odes, identical;
+char i_chr, o_chr;
+
 FILE *log;
 struct timeval starttime, lasttime, currenttime;
 struct timezone tz;
@@ -105,6 +107,25 @@ int openfile (char* fname, int flags)
   }
   return des;
 }
+
+/* Checks whether files are seekable */
+void check_seekable (const int id, const int od)
+{
+  errno = 0;
+  if (lseek (id, (off_t)0, SEEK_SET)) {
+	fprintf (stderr, "dd_rescue: (warning): input  file is not seekable!\n");
+	fprintf (stderr, "dd_rescue: (warning): %s\n", strerror (errno));
+	i_chr = 1;
+  }
+  errno = 0;
+  if (lseek (od, (off_t)0, SEEK_SET)) {
+	fprintf (stderr, "dd_rescue: (warning): output file is not seekable!\n");
+	fprintf (stderr, "dd_rescue: (warning): %s\n", strerror (errno));
+	o_chr = 1;
+  }
+  errno = 0;
+}
+
 
 void cleanup ()
 {
@@ -226,7 +247,7 @@ int copyfile (off_t max, int bs)
 {
   int errs = 0;
   /* expand file to the right length */
-  pwrite (odes, buf, 0, opos);
+  if (!o_chr) pwrite (odes, buf, 0, opos);
   while ((!max || (max-xfer > 0)) && ((!reverse) || (ipos > 0 && opos > 0))) {
     int err;
     ssize_t rd = 0;
@@ -356,10 +377,10 @@ void printhelp ()
   fprintf (stderr, "         -h         display this help and exit.\n");
   fprintf (stderr, "Note: Sizes may be given in units b(=512), k(=1024) or M(=1024*1024) bytes\n");
   fprintf (stderr, "This program is useful to rescue data in case of I/O errors, because\n");
-  fprintf (stderr, " it does not necessarily aborts or truncates the output.\n");
+  fprintf (stderr, " it does not necessarily abort or truncate the output.\n");
 }
 
-#define YESNO(flag) (flag? "yes": "no")
+#define YESNO(flag) (flag? "yes": "no ")
 
 void printinfo (FILE* file)
 {
@@ -414,6 +435,7 @@ int main (int argc, char* argv[])
   /* Initialization */
   sxfer = 0; fxfer = 0; lxfer = 0; xfer = 0;
   ides = -1; odes = -1; log = 0; nrerr = 0; buf = 0;
+  i_chr = 0; o_chr = 0;
 
   while ((c = getopt (argc, argv, ":rtfihqvVwaAb:B:m:e:s:S:l:")) != -1) {
     switch (c) {
@@ -521,6 +543,13 @@ int main (int argc, char* argv[])
     cleanup (); exit (24);
   };
 
+  check_seekable (ides, odes);
+  if (i_chr || o_chr) {
+     fprintf (stderr, "dd_rescue: (fatal): Sorry, there is no support yet for non-seekable\n");
+     fprintf (stderr, "                    input or output. This will hopefully change soon ... \n");
+     exit (19);
+  }
+	  
   /* special case: reverse with ipos == 0 means ipos = end_of_file */
   if (reverse && ipos == 0) {
     ipos = lseek (ides, ipos, SEEK_END);

@@ -79,6 +79,9 @@ Due to the way the program works (input and output are always written to the
 designated position, i.e. a seek() is done before the I/O operation is
 actually performed), char devices can not be read from or written to.
 Therefore you can't redirect output to stdout.
+It would be useful to support non-seekable devices (char devices, pipes) on
+one side, though. This will be implemented later. Hopefully soon.
+
 
 Copyright
 ---------
