@@ -278,7 +278,7 @@ ssize_t writeblock(const int towrite)
 		      (abwrerr? "fatal": "warning"),
 		      oname, (float)opos/1024, strerror(errno));
 		if (abwrerr) {
-			cleanup(); exit (21);
+			cleanup(); exit(21);
 		}
 		nrerr++;
 	}
@@ -299,7 +299,7 @@ int copyfile(const off_t max, const int bs)
 	if (!o_chr) 
 		pwrite(odes, buf, 0, opos);
 	while ( (!max || (max-xfer > 0))
-	       && ((!reverse) || (ipos > 0 && opos > 0))) {
+		&& ((!reverse) || (ipos > 0 && opos > 0)) ) {
 		int err;
 		ssize_t rd = 0;
 		ssize_t toread = ((max && max-xfer < bs)? (max-xfer): bs);
@@ -310,7 +310,7 @@ int copyfile(const off_t max, const int bs)
 				toread = opos;
 		}
 
-		if (nosparse && bs == hardbs) 
+		if (nosparse && bs == hardbs)
 			memset(buf, 0, bs);
 		rd = readblock(toread);
 
@@ -330,15 +330,15 @@ int copyfile(const off_t max, const int bs)
 			if (errno == ESPIPE || errno == EPERM || errno == ENXIO || errno == ENODEV) {
 				fplog(stderr, "dd_rescue: (warning): %s (%.1fk): %s!\n", 
 				      iname, (float)ipos/1024, strerror(errno));
-				fplog (stderr, "dd_rescue: Last error fatal! Exiting ...\n");
-				cleanup (); exit (20);
+				fplog(stderr, "dd_rescue: Last error fatal! Exiting ...\n");
+				cleanup(); exit(20);
 			}
 			/* Non fatal error */
 			if (bs == hardbs) {
 				/* Real error: Don't retry */
 				nrerr++; 
 				fplog(stderr, "dd_rescue: (warning): %s (%.1fk): %s!\n", 
-				      iname, (float)ipos/1024, strerror (errno));
+				      iname, (float)ipos/1024, strerror(errno));
 				/* exit if too many errs */
 				if (maxerr && nrerr >= maxerr) {
 					fplog(stderr, "dd_rescue: (fatal): maxerr reached!\n");
@@ -584,10 +584,10 @@ int main(int argc, char* argv[])
 			case 'l': lname = optarg; break;
 			case ':': fplog (stderr, "dd_rescue: (fatal): option %c requires an argument!\n", optopt); 
 				printhelp();
-				exit(1); break;
+				exit(11); break;
 			case '?': fplog(stderr, "dd_rescue: (fatal): unknown option %c!\n", optopt, argv[0]);
 				printhelp();
-				exit(1); break;
+				exit(11); break;
 			default: fplog(stderr, "dd_rescue: (fatal): your getopt() is buggy!\n");
 				exit(255);
 		}
@@ -600,12 +600,12 @@ int main(int argc, char* argv[])
 	if (optind < argc) {
 		fplog(stderr, "dd_rescue: (fatal): spurious options: %s ...\n", argv[optind]);
 		printhelp();
-		exit(2);
+		exit(12);
 	}
 	if (!iname || !oname) {
 		fplog(stderr, "dd_rescue: (fatal): both input and output have to be specified!\n");
 		printhelp();
-		exit (2);
+		exit(12);
 	}
 
 	if (lname) {
@@ -622,7 +622,7 @@ int main(int argc, char* argv[])
 
 	if (hardbs <= 0) {
 		fplog(stderr, "dd_rescue: (fatal): you're crazy to set you block size to %i!\n", hardbs);
-		cleanup(); exit(5);
+		cleanup(); exit(15);
 	}
 
 	/* Have those been set by cmdline params? */
@@ -644,8 +644,8 @@ int main(int argc, char* argv[])
 	/* Open input and output files */
 	ides = openfile(iname, O_RDONLY | olarge);
 	if (ides < 0) {
-		fplog(stderr, "dd_rescue: (fatal): %s: %s\n", iname, strerror (errno));
-		cleanup(); exit (22);
+		fplog(stderr, "dd_rescue: (fatal): %s: %s\n", iname, strerror(errno));
+		cleanup(); exit(22);
 	};
 
 	/* Overwrite? */
@@ -656,14 +656,14 @@ int main(int argc, char* argv[])
 		odes = 0;
 
 	if (odes > 0) 
-		close (odes);
+		close(odes);
 
 	if (odes > 0 && interact) {
 		int a;
 		do {
 			fprintf(stderr, "dd_rescue: (question): %s existing %s [y/n] ?", 
 				(dotrunc? "Overwrite": "Write into"), oname);
-			a = toupper(fgetc (stdin)); //fprintf (stderr, "\n");
+			a = toupper(fgetc (stdin)); //fprintf(stderr, "\n");
 		} while (a != 'Y' && a != 'N');
 		if (a == 'N') {
 			fplog(stderr, "dd_rescue: (fatal): exit on user request!\n");
@@ -736,8 +736,8 @@ int main(int argc, char* argv[])
 	}
 
 	/* Install signal handler */
-	signal(SIGHUP, breakhandler);
-	signal(SIGINT, breakhandler);
+	signal(SIGHUP , breakhandler);
+	signal(SIGINT , breakhandler);
 	signal(SIGTERM, breakhandler);
 	signal(SIGQUIT, breakhandler);
 
@@ -754,6 +754,7 @@ int main(int argc, char* argv[])
 
 	gettimeofday(&currenttime, NULL);
 	printreport();
-	cleanup(); exit(0);
+	cleanup();
+	return c;
 }
 
