@@ -184,9 +184,14 @@ void printstatus(FILE* const file1, FILE* const file2,
 {
 	float t1, t2; 
 	clock_t cl;
+	int err = 0;
 
-	if (sync) 
-		fsync(odes);
+	if (sync) {
+		err = fsync(odes);
+		if (err)
+			fplog(stderr, "dd_rescue: (warning): %s (%.1fk): %s!\n", 
+			      oname, (float)ipos/1024, strerror(errno));
+	}
 
 	gettimeofday(&currenttime, NULL);
 	t1 = difftimetv(&currenttime, &starttime);
@@ -218,19 +223,38 @@ void printreport()
 	printstatus(report, logfd, 0, 1);
 }
 
-void cleanup()
+int cleanup()
 {
+	int rc, errs = 0;
 	if (odes != -1) {
 		/* Make sure, the output file is expanded to the last (first) position */
 		pwrite(odes, buf, 0, opos);
-		close(odes); 
+		rc = fsync(odes);
+		if (rc) {
+			fplog(stderr, "dd_rescue: (warning): %s (%.1fk): %s!\n", 
+			      oname, (float)opos/1024, strerror(errno));
+			++errs;
+		}
+		rc = close(odes); 
+		if (rc) {
+			fplog(stderr, "dd_rescue: (warning): %s (%.1fk): %s!\n", 
+			      oname, (float)opos/1024, strerror(errno));
+			++errs
+		}
 	}
-	if (ides != -1)
-		close(ides);
+	if (ides != -1) {
+		rc = close(ides);
+		if (rc) {
+			fplog(stderr, "dd_rescue: (warning): %s (%.1fk): %s!\n", 
+			      iname, (float)ipos/1024, strerror(errno));
+			++errs
+		}
+	}
 	if (logfd)
 		fclose(logfd);
 	if (buf)
 		free(buf);
+	return errs;
 }
 
 /* is the block zero ? */
@@ -595,6 +619,7 @@ void breakhandler(int sig)
 int main(int argc, char* argv[])
 {
 	int c;
+	void **mp = (void **) &buf;
 
   	/* defaults */
 	softbs = SOFTBLOCKSIZE; hardbs = HARDBLOCKSIZE;
@@ -665,6 +690,18 @@ int main(int argc, char* argv[])
 	}
 
 	/* sanity checks */
+#ifdef O_DIRECT
+	if ((o_dir_in || o_dir_out) && hardbs < sysconf(_SC_PAGESIZE)) {
+		hardbs = sysconf(_SC_PAGESIZE);
+		fplog(stderr, "dd_rescue: (warning): O_DIRECT requires hardbs of at least %i!\n",
+		      hardbs);
+	}
+
+	if (o_dir_in || o_dir_out)
+		fplog(stderr, "dd_rescue: (warning): We don't handle misalignment of last block w/ O_DIRECT!\n");
+				
+#endif				
+
 	if (softbs < hardbs) {
 		fplog(stderr, "dd_rescue: (warning): setting hardbs from %i to softbs %i!\n",
 		      hardbs, softbs);
@@ -672,7 +709,7 @@ int main(int argc, char* argv[])
 	}
 
 	if (hardbs <= 0) {
-		fplog(stderr, "dd_rescue: (fatal): you're crazy to set you block size to %i!\n", hardbs);
+		fplog(stderr, "dd_rescue: (fatal): you're crazy to set block size to %i!\n", hardbs);
 		cleanup(); exit(15);
 	}
 
@@ -680,11 +717,19 @@ int main(int argc, char* argv[])
 	if (ipos == (off_t)-1) 
 		ipos = 0;
 
+#ifdef O_DIRECT
+	if (posix_memalign(mp, sysconf(_SC_PAGESIZE), softbs)) {
+		fplog(stderr, "dd_rescue: (fatal): allocation of aligned buffer failed!\n");
+		cleanup(); exit(18);
+	}
+#else
 	buf = malloc(softbs);
 	if (!buf) {
 		fplog(stderr, "dd_rescue: (fatal): allocation of buffer failed!\n");
 		cleanup(); exit(18);
 	}
+#endif
+
 	memset(buf, 0, softbs);
 
 	identical = check_identical(iname, oname);
