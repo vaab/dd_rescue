@@ -15,6 +15,9 @@ There are several differences:
   reached.
 * dd_rescue does not truncate the output file, unless asked to.
 * You can tell dd_rescue to start from the end of a file and move backwards.
+* It uses two block sizes, a large (soft) block size and a small (hard) block
+  size. In case of errors, the soize falls back tothe small one and is
+  promoted again after a while without errors.
 
 Purpose of dd_rescue
 --------------------
@@ -41,6 +44,11 @@ Why?
 * If you have one spot of bad sectors within the partition, it might be a
   good idea, to approach this spot from both sides. Reverse direction copy
   is your friend.
+* The two blocksizes are a performance optimization. Large block sizes
+  result in superior performance, but in case of errors, you want to try
+  to salvage every single sector. So hardbs is best be set to the hardware
+  sector size (most opften 512 bytes) and softbs to a large value, such as
+  the default 16k.
 
 Does it actually work?
 ----------------------
