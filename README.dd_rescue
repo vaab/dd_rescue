@@ -16,23 +16,23 @@ There are several differences:
 * dd_rescue does not truncate the output file, unless asked to.
 * You can tell dd_rescue to start from the end of a file and move backwards.
 * It uses two block sizes, a large (soft) block size and a small (hard) block
-  size. In case of errors, the soize falls back tothe small one and is
+  size. In case of errors, the size falls back to the small one and is
   promoted again after a while without errors.
 
 Purpose of dd_rescue
 --------------------
-The latter three features make it suitable for rescueing data from a medium
+The latter three features make it suitable for rescuing data from a medium
 with errors, i.e. a hard disk with some bad sectors.
 Why?
 * Imagine, one of your partitions is crashed, and as there are some hard
   errors, you don't want to write to this hard disk any more. Just getting
   all the data off it and retiring it seems to be suitable. However, you
-  can't access the files, as the filesystem is damaged.
+  can't access the files, as the file system is damaged.
 * Now, you want to copy the whole partition into a file. You burn it on
   CD-Rom, just to never loose it again.
   You can setup a loop device, and repair (fsck) it and hopefully are able
   to mount it.
-* Copying this partition with normal Un*x toosl like cat or dd will fail, as
+* Copying this partition with normal Un*x tools like cat or dd will fail, as
   those tools abort on error. dd_rescue instead will try to read and if it
   fails, it will go on with the next sectors. The output file naturally will
   have holes in it, of course. You can write a log file, to see, where all
@@ -44,10 +44,10 @@ Why?
 * If you have one spot of bad sectors within the partition, it might be a
   good idea, to approach this spot from both sides. Reverse direction copy
   is your friend.
-* The two blocksizes are a performance optimization. Large block sizes
+* The two block sizes are a performance optimization. Large block sizes
   result in superior performance, but in case of errors, you want to try
   to salvage every single sector. So hardbs is best be set to the hardware
-  sector size (most opften 512 bytes) and softbs to a large value, such as
+  sector size (most often 512 bytes) and softbs to a large value, such as
   the default 16k.
 
 Does it actually work?
@@ -55,13 +55,13 @@ Does it actually work?
 Yes. I wrote a predecessor program (dw) and saved most of the data of two
 crashed hard disks. The current program also helped me secure the data of
 one beginning to have problems.
-A good approach is to first copy all thos sectors which are working wothout
+A good approach is to first copy all those sectors which are working without
 problems. For this, you approach the critical regions from both sides.
 It is a good idea to take notes, which sectors are still missing.
-If you are lucky, you will be able to reconstruct you filesystem, already.
+If you are lucky, you will be able to reconstruct your file system, already.
 Otherwise, you should try to fill in more of the critical sectors. Some of
 them might be readable and provide some more useful data. This will take a
-long time, however, depending on how hard your harddisk tries to read bad
+long time, however, depending on how hard your hard disk tries to read bad
 sectors.
 
 Limitations
@@ -69,12 +69,16 @@ Limitations
 The source code does use the 64bit functions provided by glibc for file
 positioning. However, your kernel might not support it, so you might be
 unable to copy partitions larger then 2GB into a file.
-This program has been written using Llinux and only tested on a couple of
+This program has been written using Linux and only tested on a couple of
 Linux systems. It should be possible to easily port it to other Un*x
 platforms, but I did not try.
-Currently, the escape sequence for moving the cursor up is hardcoded in the
+Currently, the escape sequence for moving the cursor up is hard coded in the
 sources. It's fine for most terminal emulations (including vt100 and linux),
 but it should use the terminal description database instead.
+Due to the way the program works (input and output are always written to the
+designated position, i.e. a seek() is done before the I/O operation is
+actually performed), char devices can not be read from or written to.
+Therefore you can't redirect output to stdout.
 
 Copyright
 ---------
@@ -98,5 +102,5 @@ Have fun!
  of some help.)
 
 
-Kurt Garloff <kurt@garloff.de>, 99/10/09
+Kurt Garloff <kurt@garloff.de>, 2000-05-26
 $Id$
