@@ -307,6 +307,7 @@ int copyfile (const off_t max, const int bs)
 	/* exit if too many errs */
 	if (maxerr && nrerr >= maxerr) {
 	  fplog (stderr, "dd_rescue: (fatal): maxerr reached!\n");
+	  printreport ();
 	  cleanup (); exit (32);
 	}
 	fprintf (stderr, "%s%s%s", down, down, down);
