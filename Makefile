@@ -33,4 +33,5 @@ dist: distclean
 
 install: $(TARGETS)
 	$(INSTALL) $(INSTALLFLAGS) -o root -g root -m 755 $(TARGETS) $(INSTALLDIR)
-
+	#$(INSTALL) -o root -g root -m 755 -d /usr/doc/packages/dd_rescue
+	#$(INSTALL) -o root -g root -m 644 README /usr/doc/packages/dd_rescue
