@@ -11,6 +11,9 @@
  *
  * (c) Kurt Garloff <garloff@suse.de>, 11/97, 10/99
  * Copyright: GNU GPL
+ *
+ * Improvements from LAB Valentin, see
+ * http://www.tharbad.ath.cx/~vaab/kalysto/Utilities/dd_rhelp/dd_rhelp_en.html
  */
 
 /*
