@@ -36,6 +36,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <string.h>
+#include <ctype.h>
 #include <getopt.h>
 #include <fcntl.h>
 #include <errno.h>
@@ -433,10 +435,10 @@ int main (int argc, char* argv[])
   /* Overwrite? */
   odes = open (oname, O_WRONLY, 0640);
   if (odes > 0 && interact) {
-    char a; close (odes);
+    int a; close (odes);
     do {
       printf ("dd_rescue: (question): %s existing %s [y/n] ?", (trunc? "Overwrite": "Write into"), oname);
-      a = toupper (fgetc (stdin)); printf ("\n");
+      a = toupper (fgetc (stdin)); //printf ("\n");
     } while (a != 'Y' && a != 'N');
     if (a == 'N') {
       fplog (stdout, "dd_rescue: (fatal): exit on user request!\n");
@@ -462,7 +464,7 @@ int main (int argc, char* argv[])
     /* if explicitly set to zero, assume end of _existing_ file */
     if (opos == 0) {
       opos == lseek (odes, opos, SEEK_END);
-      if (opos == -1) {
+      if (opos == (off_t)-1) {
 	fprintf (stderr, "dd_rescue: (fatal): could not seek to end of file %s!\n", oname);
 	perror (""); cleanup (); exit (19);
       }

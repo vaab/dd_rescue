@@ -3,7 +3,7 @@
 # $Id$
 
 CC = gcc
-CFLAGS = -O2 -g
+CFLAGS = -O2 -Wall -g $(EXTRA_CFLAGS)
 INSTALL = install
 INSTALLFLAGS = -s
 prefix = /usr
