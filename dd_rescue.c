@@ -75,15 +75,15 @@ inline float difftimetv (struct timeval* t2, struct timeval *t1)
 
 int check_identical (char* in, char* on)
 {
-  int err;
+  int err = 0;
   struct stat istat, ostat;
   errno = 0;
   if (strcmp (in, on) == 0) return 1;
   err -= stat (in, &istat);
   if (err) return 0;
-  err -= stat (oname, &istat); errno = 0;
+  err -= stat (on, &istat); errno = 0;
   if (!err 
-      && istat->st_ino == ostat->st_ino && istat->st_dev == ostat->st_dev)
+      && istat.st_ino == ostat.st_ino && istat.st_dev == ostat.st_dev)
     return 1;
   return 0;
 }  
