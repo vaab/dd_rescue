@@ -382,7 +382,7 @@ int main (int argc, char* argv[])
   /* defaults */
   softbs = SOFTBLOCKSIZE; hardbs = HARDBLOCKSIZE;
   maxerr = 0; ipos = (off_t)-1; opos = (off_t)-1; maxxfer = 0; 
-  reverse = 0; trunc = 0; abwrerr = 0; sparse = 0; nosparse = 1;
+  reverse = 0; trunc = 0; abwrerr = 0; sparse = 0; nosparse = 0;
   verbose = 0; quiet = 0; interact = 0; force = 0;
   lname = 0; iname = 0; oname = 0;
 
