@@ -2,6 +2,7 @@ README file for dd_rescue
 =========================
 (c) garloff@suse.de, 10/99, GNU GPL
 
+
 Description of dd_rescue
 ------------------------
 Like dd, dd_rescue does copy data from one file or block device to another.
@@ -19,6 +20,7 @@ There are several differences:
   size. In case of errors, the size falls back to the small one and is
   promoted again after a while without errors.
 * It does not (yet) support non-seekable in- or output.
+
 
 Purpose of dd_rescue
 --------------------
@@ -51,6 +53,7 @@ Why?
   sector size (most often 512 bytes) and softbs to a large value, such as
   the default 16k.
 
+
 Does it actually work?
 ----------------------
 Yes. I wrote a predecessor program (dw) and saved most of the data of two
@@ -64,6 +67,7 @@ Otherwise, you should try to fill in more of the critical sectors. Some of
 them might be readable and provide some more useful data. This will take a
 long time, however, depending on how hard your hard disk tries to read bad
 sectors.
+
 
 Limitations
 -----------
@@ -84,6 +88,7 @@ It would be useful to support non-seekable devices (char devices, pipes,
 stdin/out) on one side, though. This will be implemented later and is
 scheduled for the dd_rescue-1.2 release.
 
+
 Copyright
 ---------
 This little program is protected by the GNU General Public License (GPL). 
@@ -99,6 +104,13 @@ To summarize:
 * There is no warranty whatsoever for this program. If it crashes your
   disks, it's at your risk.
 * This summary does not replace reading the GNU GPL itself.
+
+
+Feedback
+--------
+... is always welcome. Just send me an e-mail.
+The webpage of this program, BTW, is 
+http://www.garloff.de/kurt/linux/ddrescue/
 
 
 Have fun! 
