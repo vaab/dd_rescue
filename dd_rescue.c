@@ -18,7 +18,7 @@
  * - Use termcap to fetch cursor up code
  */
 
-#define VERSION "0.90"
+#define VERSION "0.91"
 #define ID "$Id$"
 
 #ifndef SOFTBLOCKSIZE
@@ -68,8 +68,8 @@ int openfile (char* fname, int flags)
 {
   int des = open (fname, flags, 0640);
   if (des == -1) {
-    char buf[96];
-    snprintf (buf, 96, "dd_rescue: (fatal): open \"%s\" failed", fname);
+    char buf[128];
+    snprintf (buf, 128, "dd_rescue: (fatal): open \"%s\" failed", fname);
     perror (buf); exit(17);
   }
   return des;
@@ -298,9 +298,20 @@ void printinfo (FILE* file)
   */
 }
 
+void printreport ()
+{
+  /* report */
+  if (!quiet || c) report = stdout;
+  fplog (report, "Summary for %s -> %s:\n", iname, oname);
+  if (report) printf ("%s%s%s", down, down, down);
+  if (report) printstatus (stdout, log, 0);
+}
+
 void breakhandler (int sig)
 {
-  fplog (stderr, "dd_rescue: (fatal): caught %s. exiting!\n", strsignal (sig));
+  fplog (stderr, "dd_rescue: (fatal): Caught signal %i(%s). Exiting!\n",
+	 sig, strsignal (sig));
+  printreport ();
   cleanup ();
   signal (sig, SIG_DFL);
   raise (sig);
@@ -458,16 +469,7 @@ int main (int argc, char* argv[])
   c = copyfile (maxxfer, softbs);
   
   gettimeofday (&currenttime, NULL);
-  /* report */
-  if (!quiet || c) report = stdout;
-  fplog (report, "Summary for %s -> %s:\n", iname, oname);
-  if (report) printf ("%s%s%s", down, down, down);
-  if (report) printstatus (stdout, log, 0);
-  /*
-  fplog (report, "CPU usage: %5.1f\%\n", 100*(clock()-startclock)/
-	  (CLOCKS_PER_SEC*difftimetv(&currenttime, &starttime)));
-  */
-  
+  printreport ();
   cleanup (); exit (0);
 }
 
