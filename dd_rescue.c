@@ -140,18 +140,6 @@ void check_seekable (const int id, const int od)
 }
 
 
-void cleanup ()
-{
-  if (odes != -1) {
-    /* Make sure, the output file is expanded to the last (first) position */
-    pwrite (odes, buf, 0, opos);
-    close (odes); 
-  }
-  if (ides != -1) close (ides);
-  if (log) fclose (log);
-  if (buf) free (buf);
-}
-
 void doprint (FILE* const file, const int bs, const clock_t cl, 
 	      const float t1, const float t2, const int sync)
 {
@@ -172,6 +160,22 @@ void doprint (FILE* const file, const int bs, const clock_t cl,
 	   100*(cl-startclock)/(CLOCKS_PER_SEC*t1));
 
 }
+
+/* Write to file and simultaneously log to logfile, if exsiting */
+int fplog (FILE* const file, const char * const fmt, ...)
+{
+  int ret = 0;
+  va_list vl; 
+  va_start (vl, fmt);
+  if (file) ret = vfprintf (file, fmt, vl);
+  va_end (vl);
+  if (log) {
+    va_start (vl, fmt);
+    ret = vfprintf (log, fmt, vl);
+    va_end (vl);
+  }
+  return ret;
+};
 
 void printstatus (FILE* const file1, FILE* const file2, 
 		  const int bs, const int sync)
@@ -197,21 +201,27 @@ void printstatus (FILE* const file1, FILE* const file2,
   }
 }
 
-/* Write to file and simultaneously log to logfile, if exsiting */
-int fplog (FILE* const file, const char * const fmt, ...)
+void printreport ()
 {
-  int ret = 0;
-  va_list vl; 
-  va_start (vl, fmt);
-  if (file) ret = vfprintf (file, fmt, vl);
-  va_end (vl);
-  if (log) {
-    va_start (vl, fmt);
-    ret = vfprintf (log, fmt, vl);
-    va_end (vl);
+  /* report */
+  FILE *report = 0;
+  if (!quiet || nrerr) report = stderr;
+  fplog (report, "Summary for %s -> %s:\n", iname, oname);
+  if (report) fprintf (stderr, "%s%s%s", down, down, down);
+  if (report) printstatus (stderr, log, 0, 1);
+}
+
+void cleanup ()
+{
+  if (odes != -1) {
+    /* Make sure, the output file is expanded to the last (first) position */
+    pwrite (odes, buf, 0, opos);
+    close (odes); 
   }
-  return ret;
-};
+  if (ides != -1) close (ides);
+  if (log) fclose (log);
+  if (buf) free (buf);
+}
 
 /* is the block zero ? */
 int blockiszero (const char* blk, const int ln)
@@ -489,16 +499,6 @@ void printinfo (FILE* const file)
   fplog (file, "dd_rescue: (info): verbose: %s, quiet: %s\n", 
 	  YESNO(verbose), YESNO(quiet));
   */
-}
-
-void printreport ()
-{
-  /* report */
-  FILE *report = 0;
-  if (!quiet || nrerr) report = stderr;
-  fplog (report, "Summary for %s -> %s:\n", iname, oname);
-  if (report) fprintf (stderr, "%s%s%s", down, down, down);
-  if (report) printstatus (stderr, log, 0, 1);
 }
 
 void breakhandler (int sig)
