@@ -50,7 +50,7 @@
 
 int softbs, hardbs;
 int maxerr, nrerr, reverse, trunc, abwrerr, sparse;
-int verbose, quiet, interact;
+int verbose, quiet, interact, force;
 char* buf;
 char *lname, *iname, *oname;
 off_t ipos, opos, xfer, lxfer, sxfer, fxfer, maxxfer;
@@ -306,6 +306,7 @@ void printhelp ()
   printf ("         -w         abort on Write errors (def=no);\n");
   printf ("         -a         spArse file writing (def=no);\n");
   printf ("         -i         interactive: ask before overwriting data (def=no);\n");
+  printf ("         -f         force: skip some sanity checks (def=no);\n");
   printf ("         -q         quiet operation,\n");
   printf ("         -v         verbose operation;\n");
   printf ("         -V         display version and exit;\n");
@@ -364,18 +365,19 @@ int main (int argc, char* argv[])
   softbs = SOFTBLOCKSIZE; hardbs = HARDBLOCKSIZE;
   maxerr = 0; ipos = (off_t)-1; opos = (off_t)-1; maxxfer = 0; 
   reverse = 0; trunc = 0; abwrerr = 0; sparse = 0;
-  verbose = 0; quiet = 0; interact = 0;
+  verbose = 0; quiet = 0; interact = 0; force = 0;
   lname = 0; iname = 0; oname = 0;
 
   /* Initialization */
   sxfer = 0; fxfer = 0; lxfer = 0; xfer = 0;
   ides = -1; odes = -1; log = 0; nrerr = 0; buf = 0;
 
-  while ((c = getopt (argc, argv, ":rtihqvVwab:B:m:e:s:S:l:")) != -1) {
+  while ((c = getopt (argc, argv, ":rtfihqvVwab:B:m:e:s:S:l:")) != -1) {
     switch (c) {
     case 'r': reverse = 1; break;
     case 't': trunc = O_TRUNC; break;
-    case 'i': interact = 1; break;
+    case 'i': interact = 1; force = 0; break;
+    case 'f': interact = 0; force = 1; break;
     case 'a': sparse = 1 ; break;
     case 'w': abwrerr = 1; break;
     case 'h': printhelp (); exit(0); break;
@@ -440,6 +442,10 @@ int main (int argc, char* argv[])
   }
   memset (buf, 0, softbs);
 
+  if (strcmp (iname, oname) == 0 && trunc && !force) {
+    fplog (stderr, "dd_rescue: (fatal): infile and outfile are identical and trunc turned on!\n");
+    cleanup (); exit (19);
+  }
   /* Open input and output files */
   ides = openfile (iname, O_RDONLY);
   if (ides < 0) {
@@ -468,11 +474,14 @@ int main (int argc, char* argv[])
 
   /* special case: reverse with ipos == 0 means ipos = end_of_file */
   if (reverse && ipos == 0) {
-    ipos == lseek (ides, ipos, SEEK_END);
+    ipos = lseek (ides, ipos, SEEK_END);
     if (ipos == -1) {
       fprintf (stderr, "dd_rescue: (fatal): could not seek to end of file %s!\n", iname);
-      perror (""); cleanup (); exit (19);
+      perror ("dd_rescue"); cleanup (); exit (19);
     }
+    if (verbose) 
+      fprintf (stderr, "dd_rescue: (info): ipos set to the end: %.1fk\n", 
+	       (float)ipos/1024);
     /* if opos not set, assume same position */
     if (opos == (off_t)-1) opos = ipos;
     /* if explicitly set to zero, assume end of _existing_ file */
@@ -484,6 +493,9 @@ int main (int argc, char* argv[])
       }
       /* if existing empty, assume same position */
       if (opos == 0) opos = ipos;
+      if (verbose) 
+	fprintf (stderr, "dd_rescue: (info): opos set to: %.1fk\n", 
+		 (float)opos/1024);
     }
   }
   /* if opos not set, assume same position */
@@ -491,11 +503,11 @@ int main (int argc, char* argv[])
 
   if (strcmp (iname, oname) == 0) {
     fplog (stderr, "dd_rescue: (warning): infile and outfile are identical!\n");
-    if (opos > ipos && !reverse) {
+    if (opos > ipos && !reverse && !force) {
       fplog (stderr, "dd_rescue: (warning): turned on reverse, as ipos < opos!\n");
       reverse = 1;
     }
-    if (opos < ipos && reverse) {
+    if (opos < ipos && reverse && !force) {
       fplog (stderr, "dd_rescue: (warning): turned off reverse, as opos < ipos!\n");
       reverse = 0;
     }
