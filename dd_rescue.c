@@ -63,7 +63,7 @@ clock_t startclock;
 
 char* up = "\x1b[A"; //] 
 char* down = "\n";
-
+char* right = "\x1b[E"; //]
 
 inline float difftimetv (struct timeval* t2, struct timeval *t1)
 {
@@ -100,14 +100,14 @@ void doprint (FILE* file, int bs, clock_t cl, float t1, float t2, int sync)
   fprintf (file, "             %s  %s  errs: %6i, errxfer: %11.1fk, succxfer: %11.1fk\n",
 	   (reverse? "-": " "), (bs==hardbs? "*": " "), nrerr, 
 	   (float)fxfer/1024, (float)sxfer/1024);
-  if (sync)
+  if (sync || (file != stdin && file != stdout) )
   fprintf (file, "              curr.rate: %8.0fkB/s, avg.rate: %8.0fkB/s, avg.load: %4.1f\%\n",
 	   (float)(xfer-lxfer)/(t2*1024),
 	   (float)xfer/(t1*1024),
 	   100*(cl-startclock)/(CLOCKS_PER_SEC*t1));
   else
-  fprintf (file, "              curr.rate:         kB/s, avg.rate: %8.0fkB/s, avg.load: %4.1f\%\n",
-	   (float)(xfer-lxfer)/(t2*1024),
+  fprintf (file, "              curr.rate: %s%s%s%s%s%s%s%skB/s, avg.rate: %8.0fkB/s, avg.load: %4.1f\%\n",
+	   right, right, right, right, right, right, right, right, 
 	   (float)xfer/(t1*1024),
 	   100*(cl-startclock)/(CLOCKS_PER_SEC*t1));
 
@@ -128,8 +128,8 @@ void printstatus (FILE* file1, FILE* file2, int bs, int sync)
   if (file2 == stderr || file2 == stdout) 
     fprintf (file2, "%s%s%s", up, up, up);
 
-  if (file1) doprint (file1, bs, cl, t1, t2);
-  if (file2) doprint (file2, bs, cl, t1, t2);
+  if (file1) doprint (file1, bs, cl, t1, t2, sync);
+  if (file2) doprint (file2, bs, cl, t1, t2, sync);
   memcpy (&lasttime, &currenttime, sizeof(lasttime));
   lxfer = xfer;
 }
@@ -255,8 +255,8 @@ int copyfile (off_t max, int bs)
 	if (rd != wr && !sparse) fplog (stderr, "dd_rescue: (warning): assumption rd(%i) == wr(%i) failed!\n", rd, wr);
       } /* rd > 0 */
     } /* errno */
-    //if (!quiet && !(xfer % (8*softbs))) printstatus (stdout, 0, bs, 0);
-    if (!quiet && !(xfer % (128*softbs))) printstatus (stdout, 0, bs, 1);
+    if (!quiet && !(xfer % (16*softbs))) printstatus (stdout, 0, bs, 0);
+    if (!quiet && !(xfer % (256*softbs))) printstatus (stdout, 0, bs, 1);
   } /* remain */
   return errs;
 }
