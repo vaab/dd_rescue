@@ -51,7 +51,7 @@ Why?
   result in superior performance, but in case of errors, you want to try
   to salvage every single sector. So hardbs is best be set to the hardware
   sector size (most often 512 bytes) and softbs to a large value, such as
-  the default 16k.
+  the default 64k.
 
 
 Does it actually work?
@@ -101,8 +101,8 @@ To summarize:
   release a program that uses code from this program, your program must be
   released under the terms of the GNU GPL again.
 * You are allowed to put this program on CDs or other media and charge a 
-  fee for copying and distributing it. You have to provide the source code,
-  and the GPL text, too, then.
+  fee for copying and distributing it. You have to provide the source code
+  (or a written offer to provide it) and the GPL text, too, then.
 * There is no warranty whatsoever for this program. If it crashes your
   disks, it's at your risk.
 * This summary does not replace reading the GNU GPL itself.

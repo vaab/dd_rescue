@@ -20,6 +20,7 @@
  * TODO:
  * - Use termcap to fetch cursor up/down codes
  * - Better handling of write errors: also try sub blocks
+ * - Support non-seekable in/output
  */
 
 #ifndef VERSION
@@ -501,6 +502,7 @@ void printhelp()
 	fprintf(stderr, "         -l logfdile name of a file to log errors and summary to (def=\"\");\n");
 	fprintf(stderr, "         -r         reverse direction copy (def=forward);\n");
 	fprintf(stderr, "         -t         truncate output file (def=no);\n");
+	fprintf(stderr, "         -d/D       use O_DIRECT for input/output (def=no);\n");
 	fprintf(stderr, "         -w         abort on Write errors (def=no);\n");
 	fprintf(stderr, "         -a         spArse file writing (def=no),\n");
 	fprintf(stderr, "         -A         Always write blocks, zeroed if err (def=no);\n");
@@ -555,19 +557,21 @@ int main(int argc, char* argv[])
 	maxerr = 0; ipos = (off_t)-1; opos = (off_t)-1; maxxfer = 0; 
 	reverse = 0; dotrunc = 0; abwrerr = 0; sparse = 0; nosparse = 0;
 	verbose = 0; quiet = 0; interact = 0; force = 0;
-	lname = 0; iname = 0; oname = 0;
+	lname = 0; iname = 0; oname = 0; o_dir_in = 0; o_dir_out = 0;
 
 	/* Initialization */
 	sxfer = 0; fxfer = 0; lxfer = 0; xfer = 0;
 	ides = -1; odes = -1; logfd = 0; nrerr = 0; buf = 0;
 	i_chr = 0; o_chr = 0;
 
-	while ((c = getopt(argc, argv, ":rtfihqvVwaAb:B:m:e:s:S:l:")) != -1) {
+	while ((c = getopt(argc, argv, ":rtfihqvVwaAdDb:B:m:e:s:S:l:")) != -1) {
 		switch (c) {
 			case 'r': reverse = 1; break;
 			case 't': dotrunc = O_TRUNC; break;
 			case 'i': interact = 1; force = 0; break;
 			case 'f': interact = 0; force = 1; break;
+			case 'd': o_dir_in  = O_DIRECT; break;
+			case 'D': o_dir_out = O_DIRECT; break;
 			case 'a': sparse = 1; nosparse = 0; break;
 			case 'A': nosparse = 1; sparse = 0; break;
 			case 'w': abwrerr = 1; break;
@@ -642,7 +646,7 @@ int main(int argc, char* argv[])
 		cleanup(); exit(19);
 	}
 	/* Open input and output files */
-	ides = openfile(iname, O_RDONLY | olarge);
+	ides = openfile(iname, O_RDONLY | olarge | o_dir_in);
 	if (ides < 0) {
 		fplog(stderr, "dd_rescue: (fatal): %s: %s\n", iname, strerror(errno));
 		cleanup(); exit(22);
@@ -651,7 +655,7 @@ int main(int argc, char* argv[])
 	/* Overwrite? */
 	/* Special case '-': stdout */
 	if (strcmp(oname, "-"))
-		odes = open(oname, O_WRONLY | olarge, 0640);
+		odes = open(oname, O_WRONLY | olarge | o_dir_out, 0640);
 	else 
 		odes = 0;
 
@@ -671,7 +675,7 @@ int main(int argc, char* argv[])
 		}
 	}
 
-	odes = openfile(oname, O_WRONLY | O_CREAT | olarge /*| O_EXCL*/ | dotrunc);
+	odes = openfile(oname, O_WRONLY | O_CREAT | olarge | o_dir_out /*| O_EXCL*/ | dotrunc);
 	if (odes < 0) {
 		fplog(stderr, "dd_rescue: (fatal): %s: %s\n", oname, strerror(errno));
 		cleanup(); exit(24);
