@@ -21,6 +21,7 @@
  * - Use termcap to fetch cursor up/down codes
  * - Better handling of write errors: also try sub blocks
  * - Support non-seekable in/output
+ * - Optionally support copying of attributes (ownership, perms)
  */
 
 #ifndef VERSION
@@ -52,6 +53,7 @@
 #include <errno.h>
 #include <signal.h>
 #include <time.h>
+#include <utime.h>
 #include <sys/time.h>
 #include <sys/stat.h>
 
@@ -62,7 +64,7 @@ char* buf;
 char *lname, *iname, *oname;
 off_t ipos, opos, xfer, lxfer, sxfer, fxfer, maxxfer;
 
-int ides, odes, identical;
+int ides, odes, identical, pres;
 int o_dir_in, o_dir_out;
 char i_chr, o_chr;
 
@@ -464,6 +466,36 @@ int copyfile(const off_t max, const int bs)
 	return errs;
 }
 
+int copyperm(int ifd, int ofd)
+{
+	int err; 
+	mode_t fmode;
+	struct stat stbuf;
+	err = fstat(ifd, &stbuf);
+	if (err)
+		return err;
+	fmode = stbuf.st_mode & (S_IRWXU | S_IRWXG | S_IRWXO | S_ISUID | S_ISGID | S_ISVTX);
+	err = fchown(ofd, stbuf.st_uid, stbuf.st_gid);
+	if (err)
+		fmode &= ~(S_ISUID | S_ISGID);
+	err += fchmod(ofd, fmode);
+	return err;
+}
+
+/*  File time copy */
+int copytimes(const char* inm, const char* onm)
+{
+	int err;
+	struct stat stbuf;
+	struct utimbuf utbuf;
+	err = stat(inm, &stbuf);
+	if (err)
+		return err;
+	utbuf.actime  = stbuf.st_atime;
+	utbuf.modtime = stbuf.st_mtime;
+	err = utime(onm, &utbuf);
+	return err;
+}
 
 off_t readint(const char* const ptr)
 {
@@ -482,7 +514,7 @@ off_t readint(const char* const ptr)
 	}
 	return (off_t)res;
 }
-  
+
 void printversion()
 {
 	fprintf(stderr, "\ndd_rescue Version %s, garloff@suse.de, GNU GPL\n", VERSION);
@@ -509,6 +541,7 @@ void printhelp()
 	fprintf(stderr, "         -A         Always write blocks, zeroed if err (def=no);\n");
 	fprintf(stderr, "         -i         interactive: ask before overwriting data (def=no);\n");
 	fprintf(stderr, "         -f         force: skip some sanity checks (def=no);\n");
+	fprintf(stderr, "         -p         preserve: preserve ownership / perms (def=no)\n");
 	fprintf(stderr, "         -q         quiet operation,\n");
 	fprintf(stderr, "         -v         verbose operation;\n");
 	fprintf(stderr, "         -V         display version and exit;\n");
@@ -557,7 +590,7 @@ int main(int argc, char* argv[])
 	softbs = SOFTBLOCKSIZE; hardbs = HARDBLOCKSIZE;
 	maxerr = 0; ipos = (off_t)-1; opos = (off_t)-1; maxxfer = 0; 
 	reverse = 0; dotrunc = 0; abwrerr = 0; sparse = 0; nosparse = 0;
-	verbose = 0; quiet = 0; interact = 0; force = 0;
+	verbose = 0; quiet = 0; interact = 0; force = 0; pres = 0;
 	lname = 0; iname = 0; oname = 0; o_dir_in = 0; o_dir_out = 0;
 
 	/* Initialization */
@@ -565,7 +598,7 @@ int main(int argc, char* argv[])
 	ides = -1; odes = -1; logfd = 0; nrerr = 0; buf = 0;
 	i_chr = 0; o_chr = 0;
 
-	while ((c = getopt(argc, argv, ":rtfihqvVwaAdDb:B:m:e:s:S:l:")) != -1) {
+	while ((c = getopt(argc, argv, ":rtfihqvVwaAdDpb:B:m:e:s:S:l:")) != -1) {
 		switch (c) {
 			case 'r': reverse = 1; break;
 			case 't': dotrunc = O_TRUNC; break;
@@ -573,6 +606,7 @@ int main(int argc, char* argv[])
 			case 'f': interact = 0; force = 1; break;
 			case 'd': o_dir_in  = O_DIRECT; break;
 			case 'D': o_dir_out = O_DIRECT; break;
+			case 'p': pres = 1; break;
 			case 'a': sparse = 1; nosparse = 0; break;
 			case 'A': nosparse = 1; sparse = 0; break;
 			case 'w': abwrerr = 1; break;
@@ -682,6 +716,9 @@ int main(int argc, char* argv[])
 		cleanup(); exit(24);
 	}
 
+	if (pres)
+		copyperm(ides, odes);
+			
 	check_seekable(ides, odes);
 	if (i_chr || o_chr) {
 		fprintf(stderr, "dd_rescue: (fatal): Sorry, there is no support yet for non-seekable\n");
@@ -760,6 +797,8 @@ int main(int argc, char* argv[])
 	gettimeofday(&currenttime, NULL);
 	printreport();
 	cleanup();
+	if (pres)
+		copytimes(iname, oname);
 	return c;
 }
 
