@@ -65,17 +65,18 @@ struct timeval starttime, lasttime, currenttime;
 struct timezone tz;
 clock_t startclock;
 
-char* up = "\x1b[A"; //] 
-char* down = "\n";
-char* right = "\x1b[C"; //]
+const char* up = "\x1b[A"; //] 
+const char* down = "\n";
+const char* right = "\x1b[C"; //]
 
-inline float difftimetv (struct timeval* t2, struct timeval *t1)
+inline float difftimetv (const struct timeval* const t2, 
+			 const struct timeval* const t1)
 {
   return (float) (t2->tv_sec - t1->tv_sec) + 1e-6 * (float)(t2->tv_usec - t1->tv_usec);
 }
 
 
-int check_identical (char* in, char* on)
+int check_identical (const char* const in, const char* const on)
 {
   int err = 0;
   struct stat istat, ostat;
@@ -91,7 +92,7 @@ int check_identical (char* in, char* on)
 }  
 
 
-int openfile (char* fname, int flags)
+int openfile (const char* const fname, const int flags)
 {
   int des;
   if (!strcmp (fname, "-")) {
@@ -139,7 +140,8 @@ void cleanup ()
   if (buf) free (buf);
 }
 
-void doprint (FILE* file, int bs, clock_t cl, float t1, float t2, int sync)
+void doprint (FILE* const file, const int bs, const clock_t cl, 
+	      const float t1, const float t2, const int sync)
 {
   fprintf (file, "dd_rescue: (info): ipos:%12.1fk, opos:%12.1fk, xferd:%12.1fk\n",
 	   (float)ipos/1024, (float)opos/1024, (float)xfer/1024);
@@ -147,19 +149,20 @@ void doprint (FILE* file, int bs, clock_t cl, float t1, float t2, int sync)
 	   (reverse? "-": " "), (bs==hardbs? "*": " "), nrerr, 
 	   (float)fxfer/1024, (float)sxfer/1024);
   if (sync || (file != stdin && file != stdout) )
-  fprintf (file, "             +curr.rate:%9.0fkB/s, avg.rate:%9.0fkB/s, avg.load:%5.1f\%\n",
+  fprintf (file, "             +curr.rate:%9.0fkB/s, avg.rate:%9.0fkB/s, avg.load:%5.1f%%\n",
 	   (float)(xfer-lxfer)/(t2*1024),
 	   (float)xfer/(t1*1024),
 	   100*(cl-startclock)/(CLOCKS_PER_SEC*t1));
   else
-  fprintf (file, "             -curr.rate:%s%s%s%s%s%s%s%s%skB/s, avg.rate:%9.0fkB/s, avg.load:%5.1f\%\n",
+  fprintf (file, "             -curr.rate:%s%s%s%s%s%s%s%s%skB/s, avg.rate:%9.0fkB/s, avg.load:%5.1f%%\n",
 	   right, right, right, right, right, right, right, right, right,
 	   (float)xfer/(t1*1024),
 	   100*(cl-startclock)/(CLOCKS_PER_SEC*t1));
 
 }
 
-void printstatus (FILE* file1, FILE* file2, int bs, int sync)
+void printstatus (FILE* const file1, FILE* const file2, 
+		  const int bs, const int sync)
 {
   float t1, t2; 
   clock_t cl;
@@ -183,7 +186,7 @@ void printstatus (FILE* file1, FILE* file2, int bs, int sync)
 }
 
 /* Write to file and simultaneously log to logfile, if exsiting */
-int fplog (FILE* file, char * fmt, ...)
+int fplog (FILE* const file, const char * const fmt, ...)
 {
   int ret = 0;
   va_list vl; 
@@ -201,14 +204,14 @@ int fplog (FILE* file, char * fmt, ...)
 /* is the block zero ? */
 int blockzero (const char* blk, const int ln)
 {
-  unsigned long* ptr = (unsigned int*)blk;
-  while ((ptr-blk) < ln/sizeof(long)) 
+  unsigned long* ptr = (unsigned long*)blk;
+  while ((ptr-(unsigned long*)blk) < ln/sizeof(unsigned long))
 	if (*(ptr++)) return 0;
   return 1;
 }
 
 
-ssize_t readblock (int toread)
+ssize_t readblock (const int toread)
 {
   ssize_t err, rd = 0;
   errno = 0; /* should not be necessary */
@@ -221,7 +224,7 @@ ssize_t readblock (int toread)
   return (err == -1? err: rd);
 }
 
-ssize_t writeblock (int towrite)
+ssize_t writeblock (const int towrite)
 {
   ssize_t err, wr = 0;
   errno = 0; /* should not be necessary */
@@ -244,13 +247,12 @@ ssize_t writeblock (int towrite)
 }
 
 /* can be invoked in two ways: bs==hardbs or bs==softbs */
-int copyfile (off_t max, int bs)
+int copyfile (const off_t max, const int bs)
 {
   int errs = 0; errno = 0;
   /* expand file to the right length */
   if (!o_chr) pwrite (odes, buf, 0, opos);
-  while ((errno != -ENOSPC) && 
-	 (!max || (max-xfer > 0)) 
+  while ( (!max || (max-xfer > 0))
 	 && ((!reverse) || (ipos > 0 && opos > 0))) {
     int err;
     ssize_t rd = 0;
@@ -320,6 +322,7 @@ int copyfile (off_t max, int bs)
 	sxfer += wr; xfer += rd;
 	if (reverse) {ipos -= rd; opos -= rd;}
 	else {ipos += rd; opos += rd;}
+	if (wr < 0 && errno == ENOSPC) return errs;
 	if (rd != wr && !sparse) fplog (stderr, "dd_rescue: (warning): assumption rd(%i) == wr(%i) failed!\n", rd, wr);
       } /* rd > 0 */
     } /* errno */
@@ -332,7 +335,7 @@ int copyfile (off_t max, int bs)
 }
 
 
-off_t readint (char* ptr)
+off_t readint (const char* const ptr)
 {
   char *es; double res;
 
@@ -386,7 +389,7 @@ void printhelp ()
 
 #define YESNO(flag) (flag? "yes": "no ")
 
-void printinfo (FILE* file)
+void printinfo (FILE* const file)
 {
   fplog (file, "dd_rescue: (info): about to transfer %.1f kBytes from %s to %s\n",
 	 (double)maxxfer/1024, iname, oname);

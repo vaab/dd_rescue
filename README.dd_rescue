@@ -87,7 +87,8 @@ Therefore you can't redirect output to stdout.
 It would be useful to support non-seekable devices (char devices, pipes,
 stdin/out) on one side, though. This will be implemented later and is
 scheduled for the dd_rescue-1.2 release. 
-(Limited support is already there.)
+(Actually, limited support is already there. dd_rescue /dev/zero /dev/hda
+ works.)
 
 
 Copyright
