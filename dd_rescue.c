@@ -238,7 +238,7 @@ int cleanup()
 		if (rc) {
 			fplog(stderr, "dd_rescue: (warning): %s (%.1fk): %s!\n", 
 			      oname, (float)opos/1024, strerror(errno));
-			++errs
+			++errs;
 		}
 	}
 	if (ides != -1) {
@@ -246,7 +246,7 @@ int cleanup()
 		if (rc) {
 			fplog(stderr, "dd_rescue: (warning): %s (%.1fk): %s!\n", 
 			      iname, (float)ipos/1024, strerror(errno));
-			++errs
+			++errs;
 		}
 	}
 	if (logfd)
