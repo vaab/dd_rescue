@@ -7,7 +7,8 @@ CFLAGS = -O2 -g
 INSTALL = install
 INSTALLFLAGS = -s
 prefix = /usr
-INSTALLDIR = $(prefix)/bin
+#INSTALLDIR = $(prefix)/bin
+INSTALLDIR = /bin
 TARGETS = dd_rescue
 OBJECTS = dd_rescue.o
 

@@ -15,8 +15,6 @@
 
 /*
  * TODO:
- * - Testing
- * - Copy reverse
  * - Use termcap to fetch cursor up code
  */
 
@@ -178,7 +176,7 @@ int copyfile (off_t max, int bs)
 	fplog (stderr, "dd_rescue: (warning): %s (%.1fk): %s!\n", 
 	       iname, (float)ipos/1024, strerror (errno));
 	/* exit if too many errs */
-	if (maxerr && nrerr > maxerr) {
+	if (maxerr && nrerr >= maxerr) {
 	  fplog (stderr, "dd_rescue: (fatal): maxerr reached!\n");
 	  cleanup (); exit (32);
 	}

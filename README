@@ -1,0 +1,95 @@
+README file for dd_rescue
+=========================
+(c) garloff@suse.de, 10/99, GNU GPL
+
+Description of dd_rescue
+------------------------
+Like dd, dd_rescue does copy data from one file or block device to another.
+You can specify file positions (called seek and Skip in dd).
+
+There are several differences:
+* dd_rescue does not provide character conversions.
+* The command syntax is different. Call dd_rescue -h.
+* dd_rescue does not abort on errors on the input file, unless you specify a
+  maximum error number. Then dd_rescue will abort when this number is
+  reached.
+* dd_rescue does not truncate the output file, unless asked to.
+* You can tell dd_rescue to start from the end of a file and move backwards.
+
+Purpose of dd_rescue
+--------------------
+The latter three features make it suitable for rescueing data from a medium
+with errors, i.e. a hard disk with some bad sectors.
+Why?
+* Imagine, one of your partitions is crashed, and as there are some hard
+  errors, you don't want to write to this hard disk any more. Just getting
+  all the data off it and retiring it seems to be suitable. However, you
+  can't access the files, as the filesystem is damaged.
+* Now, you want to copy the whole partition into a file. You burn it on
+  CD-Rom, just to never loose it again.
+  You can setup a loop device, and repair (fsck) it and hopefully are able
+  to mount it.
+* Copying this partition with normal Un*x toosl like cat or dd will fail, as
+  those tools abort on error. dd_rescue instead will try to read and if it
+  fails, it will go on with the next sectors. The output file naturally will
+  have holes in it, of course. You can write a log file, to see, where all
+  these errors are located.
+* The data rate drops very low, when errors are encountered. If you
+  interrupt the process of copying, you don't loose anything. You can just
+  continue at any position later. The output file will just be filled in
+  further and not truncated as with other Un*x tools.
+* If you have one spot of bad sectors within the partition, it might be a
+  good idea, to approach this spot from both sides. Reverse direction copy
+  is your friend.
+
+Does it actually work?
+----------------------
+Yes. I wrote a predecessor program (dw) and saved most of the data of two
+crashed hard disks. The current program also helped me secure the data of
+one beginning to have problems.
+A good approach is to first copy all thos sectors which are working wothout
+problems. For this, you approach the critical regions from both sides.
+It is a good idea to take notes, which sectors are still missing.
+If you are lucky, you will be able to reconstruct you filesystem, already.
+Otherwise, you should try to fill in more of the critical sectors. Some of
+them might be readable and provide some more useful data. This will take a
+long time, however, depending on how hard your harddisk tries to read bad
+sectors.
+
+Limitations
+-----------
+The source code does use the 64bit functions provided by glibc for file
+positioning. However, your kernel might not support it, so you might be
+unable to copy partitions larger then 2GB into a file.
+This program has been written using Llinux and only tested on a couple of
+Linux systems. It should be possible to easily port it to other Un*x
+platforms, but I did not try.
+Currently, the escape sequence for moving the cursor up is hardcoded in the
+sources. It's fine for most terminal emulations (including vt100 and linux),
+but it should use the terminal description database instead.
+
+Copyright
+---------
+This little program is protected by the GNU General Public License (GPL). 
+(See the file COPYRIGHT, which probably exists a few hundred times on your
+computer. If not: I will send you one.)
+To summarize:
+* You are free to use this program for anything you like. However, if you
+  use code from this program, your program must be released under the GNU
+  GPL again.
+* You are not allowed to make money by selling this program. However, you
+  are allowed to put it on CDs or other media and charge a moderate fee
+  for copying and distributing it. You have to provide the source code, too,
+  then.
+* There is no warranty whatsoever for this program. If it crashes your
+  disks, it's at your risk.
+* This summary does not replace reading the GNU GPL itself.
+
+
+Have fun! 
+(Hopefully you don't need this program. But if you do: I wish it will be
+ of some help.)
+
+
+Kurt Garloff <kurt@garloff.de>, 99/10/09
+$Id$
