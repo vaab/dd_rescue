@@ -130,8 +130,10 @@ void printstatus (FILE* file1, FILE* file2, int bs, int sync)
 
   if (file1) doprint (file1, bs, cl, t1, t2, sync);
   if (file2) doprint (file2, bs, cl, t1, t2, sync);
-  memcpy (&lasttime, &currenttime, sizeof(lasttime));
-  lxfer = xfer;
+  if (sync) {
+    memcpy (&lasttime, &currenttime, sizeof(lasttime));
+    lxfer = xfer;
+  }
 }
 
 /* Write to file and simultaneously log to logfile, if exsiting */
