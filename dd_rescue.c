@@ -58,7 +58,7 @@
 int softbs, hardbs;
 int maxerr, nrerr, reverse, dotrunc, abwrerr, sparse, nosparse;
 int verbose, quiet, interact, force;
-char* buf;
+void* buf;
 char *lname, *iname, *oname;
 off_t ipos, opos, xfer, lxfer, sxfer, fxfer, maxxfer;
 
@@ -130,9 +130,9 @@ int openfile(const char* const fname, const int flags)
 	} else
 		fdes = open(fname, flags, 0640);
 	if (fdes == -1) {
-		char buf[128];
-		snprintf(buf, 128, "dd_rescue: (fatal): open \"%s\" failed", fname);
-		perror(buf); exit(17);
+		char nbuf[128];
+		snprintf(nbuf, 128, "dd_rescue: (fatal): open \"%s\" failed", fname);
+		perror(nbuf); exit(17);
 	}
 	return fdes;
 }
