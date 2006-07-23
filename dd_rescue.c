@@ -55,11 +55,11 @@
 #include <sys/time.h>
 #include <sys/stat.h>
 
-int softbs, hardbs;
+int softbs, hardbs, syncfreq;
 int maxerr, nrerr, reverse, dotrunc, abwrerr, sparse, nosparse;
 int verbose, quiet, interact, force;
 void* buf;
-char *lname, *iname, *oname;
+char *lname, *iname, *oname, *bbname = NULL;
 off_t ipos, opos, xfer, lxfer, sxfer, fxfer, maxxfer;
 
 int ides, odes, identical, pres;
@@ -178,17 +178,21 @@ void doprint(FILE* const file, const int bs, const clock_t cl,
 			100.0*(cl-startclock)/(CLOCKS_PER_SEC*t1));
 }
 
-void printstatus(FILE* const file1, FILE* const file2, 
+void printstatus(FILE* const file1, FILE* const file2,
 		 const int bs, const int sync)
 {
 	float t1, t2; 
 	clock_t cl;
-	int err = 0;
+
+	if (file1 == stderr || file1 == stdout) 
+		fprintf(file1, "%s%s%s", up, up, up);
+	if (file2 == stderr || file2 == stdout) 
+		fprintf(file2, "%s%s%s", up, up, up);
 
 	if (sync) {
-		err = fsync(odes);
+		int err = fsync(odes);
 		if (err)
-			fplog(stderr, "dd_rescue: (warning): %s (%.1fk): %s!\n", 
+			fplog(stderr, "dd_rescue: (warning): %s (%.1fk): %s!    \n", 
 			      oname, (float)ipos/1024, strerror(errno));
 	}
 
@@ -196,11 +200,6 @@ void printstatus(FILE* const file1, FILE* const file2,
 	t1 = difftimetv(&currenttime, &starttime);
 	t2 = difftimetv(&currenttime, &lasttime);
 	cl = clock();
-
-	if (file1 == stderr || file1 == stdout) 
-		fprintf(file1, "%s%s%s", up, up, up);
-	if (file2 == stderr || file2 == stdout) 
-		fprintf(file2, "%s%s%s", up, up, up);
 
 	if (file1) 
 		doprint(file1, bs, cl, t1, t2, sync);
@@ -210,6 +209,17 @@ void printstatus(FILE* const file1, FILE* const file2,
 		memcpy(&lasttime, &currenttime, sizeof(lasttime));
 		lxfer = xfer;
 	}
+}
+
+void savebb( int block )
+{
+	fplog(stderr, "Bad block: %d\n", block);
+    
+	if( bbname == NULL )
+		return;
+	FILE *bbfile = fopen(bbname,"a");
+	fprintf(bbfile,"%d\n",block);
+	fclose(bbfile);
 }
 
 void printreport()
@@ -398,6 +408,7 @@ int copyfile(const off_t max, const int bs)
 					 	*/
 					}
 				}
+				savebb(ipos/bs);
 				fxfer += toread; xfer += toread;
 				if (reverse) { 
 					ipos -= toread; opos -= toread; 
@@ -489,10 +500,11 @@ int copyfile(const off_t max, const int bs)
 				}
 			} /* rd > 0 */
 		} /* errno */
-		if (!quiet && !(xfer % (16*softbs)) && (xfer % (512*softbs))) 
+
+		if (syncfreq && !(xfer % (syncfreq*softbs)))
+			printstatus((quiet? 0: stderr), 0, bs, 1);
+		else if (!quiet && !(xfer % (16*softbs)))
 			printstatus(stderr, 0, bs, 0);
-		if (!quiet && !(xfer % (512*softbs))) 
-			printstatus(stderr, 0, bs, 1);
 	} /* remain */
 	return errs;
 }
@@ -555,29 +567,31 @@ void printversion()
 void printhelp()
 {
 	printversion();
-	fprintf(stderr, "dd_rescue copies data from one file (or block device) to another\n");
+	fprintf(stderr, "dd_rescue copies data from one file (or block device) to another.\n");
 	fprintf(stderr, "USAGE: dd_rescue [options] infile outfile\n");
 	fprintf(stderr, "Options: -s ipos    start position in  input file (default=0),\n");
-	fprintf(stderr, "         -S opos    start position in output file (def=ipos);\n");
+	fprintf(stderr, "         -S opos    start position in output file (def=ipos),\n");
 	fprintf(stderr, "         -b softbs  block size for copy operation (def=%i),\n", SOFTBLOCKSIZE );
-	fprintf(stderr, "         -B hardbs  fallback block size in case of errs (def=%i);\n", HARDBLOCKSIZE );
-	fprintf(stderr, "         -e maxerr  exit after maxerr errors (def=0=infinite);\n");
-	fprintf(stderr, "         -m maxxfer maximum amount of data to be transfered (def=0=inf);\n");
-	fprintf(stderr, "         -l logfdile name of a file to log errors and summary to (def=\"\");\n");
-	fprintf(stderr, "         -r         reverse direction copy (def=forward);\n");
-	fprintf(stderr, "         -t         truncate output file (def=no);\n");
+	fprintf(stderr, "         -B hardbs  fallback block size in case of errs (def=%i),\n", HARDBLOCKSIZE );
+	fprintf(stderr, "         -e maxerr  exit after maxerr errors (def=0=infinite),\n");
+	fprintf(stderr, "         -m maxxfer maximum amount of data to be transfered (def=0=inf),\n");
+	fprintf(stderr, "         -y syncfrq frequency of fsync calls on outfile (def=512*softbs),\n");
+	fprintf(stderr, "         -l logfile name of a file to log errors and summary to (def=\"\"),\n");
+	fprintf(stderr, "         -o bbfile  name of a file to log bad blocks numbers (def=\"\"),\n");
+	fprintf(stderr, "         -r         reverse direction copy (def=forward),\n");
+	fprintf(stderr, "         -t         truncate output file (def=no),\n");
 #ifdef O_DIRECT
-	fprintf(stderr, "         -d/D       use O_DIRECT for input/output (def=no);\n");
+	fprintf(stderr, "         -d/D       use O_DIRECT for input/output (def=no),\n");
 #endif
-	fprintf(stderr, "         -w         abort on Write errors (def=no);\n");
+	fprintf(stderr, "         -w         abort on Write errors (def=no),\n");
 	fprintf(stderr, "         -a         spArse file writing (def=no),\n");
-	fprintf(stderr, "         -A         Always write blocks, zeroed if err (def=no);\n");
-	fprintf(stderr, "         -i         interactive: ask before overwriting data (def=no);\n");
-	fprintf(stderr, "         -f         force: skip some sanity checks (def=no);\n");
-	fprintf(stderr, "         -p         preserve: preserve ownership / perms (def=no)\n");
+	fprintf(stderr, "         -A         Always write blocks, zeroed if err (def=no),\n");
+	fprintf(stderr, "         -i         interactive: ask before overwriting data (def=no),\n");
+	fprintf(stderr, "         -f         force: skip some sanity checks (def=no),\n");
+	fprintf(stderr, "         -p         preserve: preserve ownership / perms (def=no),\n");
 	fprintf(stderr, "         -q         quiet operation,\n");
-	fprintf(stderr, "         -v         verbose operation;\n");
-	fprintf(stderr, "         -V         display version and exit;\n");
+	fprintf(stderr, "         -v         verbose operation,\n");
+	fprintf(stderr, "         -V         display version and exit,\n");
 	fprintf(stderr, "         -h         display this help and exit.\n");
 	fprintf(stderr, "Note: Sizes may be given in units b(=512), k(=1024), M(=1024^2) or G(1024^3) bytes\n");
 	fprintf(stderr, "This program is useful to rescue data in case of I/O errors, because\n");
@@ -618,6 +632,7 @@ void breakhandler(int sig)
 int main(int argc, char* argv[])
 {
 	int c;
+	off_t syncsz = -1;
 	void **mp = (void **) &buf;
 
   	/* defaults */
@@ -632,7 +647,7 @@ int main(int argc, char* argv[])
 	ides = -1; odes = -1; logfd = 0; nrerr = 0; buf = 0;
 	i_chr = 0; o_chr = 0;
 
-	while ((c = getopt(argc, argv, ":rtfihqvVwaAdDpb:B:m:e:s:S:l:")) != -1) {
+	while ((c = getopt(argc, argv, ":rtfihqvVwaAdDpb:B:m:e:s:S:l:o:y:")) != -1) {
 		switch (c) {
 			case 'r': reverse = 1; break;
 			case 't': dotrunc = O_TRUNC; break;
@@ -654,9 +669,11 @@ int main(int argc, char* argv[])
 			case 'B': hardbs = (int)readint(optarg); break;
 			case 'm': maxxfer = readint(optarg); break;
 			case 'e': maxerr = (int)readint(optarg); break;
+			case 'y': syncsz = readint(optarg); break;
 			case 's': ipos = readint(optarg); break;
 			case 'S': opos = readint(optarg); break;
 			case 'l': lname = optarg; break;
+			case 'o': bbname = optarg; break;
 			case ':': fplog (stderr, "dd_rescue: (fatal): option %c requires an argument!\n", optopt); 
 				printhelp();
 				exit(11); break;
@@ -711,6 +728,14 @@ int main(int argc, char* argv[])
 		fplog(stderr, "dd_rescue: (fatal): you're crazy to set block size to %i!\n", hardbs);
 		cleanup(); exit(15);
 	}
+
+	/* Set sync frequency */
+	if (syncsz == -1)
+		syncfreq = 512;
+	else if (syncsz == 0)
+		syncfreq = 0;
+	else
+		syncfreq = (syncsz + softbs - 1) / softbs;
 
 	/* Have those been set by cmdline params? */
 	if (ipos == (off_t)-1) 
