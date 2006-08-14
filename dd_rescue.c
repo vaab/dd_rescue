@@ -211,14 +211,14 @@ void printstatus(FILE* const file1, FILE* const file2,
 	}
 }
 
-void savebb( int block )
+void savebb(int block)
 {
+	FILE *bbfile;
 	fplog(stderr, "Bad block: %d\n", block);
-    
-	if( bbname == NULL )
+	if (bbname == NULL)
 		return;
-	FILE *bbfile = fopen(bbname,"a");
-	fprintf(bbfile,"%d\n",block);
+	bbfile = fopen(bbname, "a");
+	fprintf(bbfile, "%d\n", block);
 	fclose(bbfile);
 }
 
@@ -766,7 +766,7 @@ int main(int argc, char* argv[])
 	if (ides < 0) {
 		fplog(stderr, "dd_rescue: (fatal): %s: %s\n", iname, strerror(errno));
 		cleanup(); exit(22);
-	};
+	}
 
 	/* Overwrite? */
 	/* Special case '-': stdout */
