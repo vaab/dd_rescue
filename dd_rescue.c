@@ -395,7 +395,6 @@ int copyfile(const off_t max, const int bs)
 				errno = 0;
 				if (nosparse) {
 					ssize_t wr = 0;
-					/* FIXME: Was writeblock(rd), why? */
 					errs += ((wr = writeblock(toread)) < toread ? 1: 0);
 					if (wr < 0 && (errno == ENOSPC 
 						   || (errno == EFBIG && !reverse))) 
