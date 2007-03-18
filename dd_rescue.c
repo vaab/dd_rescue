@@ -395,12 +395,13 @@ int copyfile(const off_t max, const int bs)
 				errno = 0;
 				if (nosparse) {
 					ssize_t wr = 0;
-					errs += ((wr = writeblock(rd)) < rd ? 1: 0);
+					/* FIXME: Was writeblock(rd), why? */
+					errs += ((wr = writeblock(toread)) < toread ? 1: 0);
 					if (wr < 0 && (errno == ENOSPC 
 						   || (errno == EFBIG && !reverse))) 
 						return errs;
-					if (rd != wr) {
-						fplog(stderr, "dd_rescue: (warning): assumption rd(%i) == wr(%i) failed! \n", rd, wr);	
+					if (toread != wr) {
+						fplog(stderr, "dd_rescue: (warning): assumption toread(%i) == wr(%i) failed! \n", toread, wr);	
 						/*
 						fplog(stderr, "dd_rescue: (warning): %s (%.1fk): %s!\n", 
 						      oname, (float)opos/1024, strerror(errno));
@@ -801,10 +802,17 @@ int main(int argc, char* argv[])
 		copyperm(ides, odes);
 			
 	check_seekable(ides, odes);
+
 	if (0 && i_chr && o_chr) {
 		fprintf(stderr, "dd_rescue: (fatal): Sorry, there is no support yet for non-seekable\n");
 		fprintf(stderr, "                    input and output. This will hopefully change soon ... \n");
 		exit(19);
+	}
+
+	if (o_chr) {
+		if (!nosparse)
+			fprintf(stderr, "dd_rescue: (warning): Don't use sparse writes for non-seekable output\n");
+		nosparse = 1; sparse = 0;
 	}
 
 	/* special case: reverse with ipos == 0 means ipos = end_of_file */
