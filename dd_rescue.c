@@ -241,6 +241,8 @@ int mayexpandfile()
 	if (init_opos > opos)
 		maxopos = init_opos;
 	stat(oname, &st);
+	if (!S_ISREG(st.st_mode))
+		return 0;
 	if (st.st_size < maxopos)
 		return truncate(oname, maxopos);
 	else 
