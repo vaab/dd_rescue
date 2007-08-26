@@ -71,9 +71,15 @@ struct timeval starttime, lasttime, currenttime;
 struct timezone tz;
 clock_t startclock;
 
-const char* up = "\x1b[A"; //] 
-const char* down = "\n";
-const char* right = "\x1b[C"; //]
+#ifndef UP
+# define UP "\x1b[A"
+# define DOWN "\n"
+# define RIGHT "\x1b[C"
+#endif
+
+const char* up = UP;
+const char* down = DOWN;
+const char* right = RIGHT;
 
 int lastsparse = 0;
 
