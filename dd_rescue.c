@@ -272,8 +272,8 @@ int blockiszero(const char* blk, const int ln)
 	unsigned long* ptr = (unsigned long*)blk;
 	while ((ptr-(unsigned long*)blk) < ln/sizeof(unsigned long))
 		if (*(ptr++)) 
-			return 0;
-	return 1;
+			return (sizeof(unsigned long)*(ptr-(unsigned long*)blk));
+	return ln;
 }
 
 inline ssize_t mypread(int fd, void* bf, size_t sz, off_t off)
@@ -425,7 +425,7 @@ int copyfile(const off_t max, const int bs)
 				/* But first: write available data and advance (optimization) */
 				if (rd > 0) {
 					ssize_t wr = 0; errno = 0;
-					if (!sparse || !blockiszero(buf, bs))
+					if (!sparse || blockiszero(buf, bs) < rd)
 						errs += ((wr = writeblock(rd)) < rd ? 1: 0);
 					if (!reverse) {
 						ipos += rd; opos += rd; 
@@ -480,7 +480,7 @@ int copyfile(const off_t max, const int bs)
 	      		/* errno == 0: We can write to disk */
       			if (rd > 0) {
 				ssize_t wr = 0;
-				if (!sparse || !blockiszero(buf, bs))
+				if (!sparse || blockiszero(buf, bs) < rd)
 					errs += ((wr = writeblock(rd)) < rd ? 1: 0);
 				sxfer += wr; xfer += rd;
 				if (reverse) { 
