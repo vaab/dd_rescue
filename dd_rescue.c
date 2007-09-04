@@ -616,18 +616,25 @@ int copyfile_splice(const off_t max)
 	while ((toread	= blockxfer(max, softbs)) > 0) {
 		ssize_t rd = sys_splice(ides, &ipos, fd_pipe[1], NULL, toread,
 					SPLICE_F_MOVE | SPLICE_F_MORE);
-		if (rd < 0)
+		if (rd < 0) {
+			close(fd_pipe[0]); close(fd_pipe[1]);
 			return copyfile_softbs(max);
-		if (rd == 0)
+		}
+		if (rd == 0) {
+			close(fd_pipe[0]); close(fd_pipe[1]);
 			return 0;
+		}
 		while (rd) {
 			ssize_t wr = sys_splice(fd_pipe[0], NULL, odes, &opos, rd,
 					SPLICE_F_MOVE | SPLICE_F_MORE);
-			if (wr < 0)
+			if (wr < 0) {
+				close(fd_pipe[0]); close(fd_pipe[1]);
 				exit(23);
+			}
 			rd -= wr; xfer += wr; sxfer += wr;
 		}
 	}
+	close(fd_pipe[0]); close(fd_pipe[1]);
 	return 0;
 }
 #endif
