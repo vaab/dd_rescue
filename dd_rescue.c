@@ -57,10 +57,8 @@
 
 /* splice */
 #ifdef __linux__
-# warning LINUX
-//# include <linux/syscalls.h>
+# include <asm/unistd.h>
 # ifdef __NR_splice
-#  warning splice
 #  define HAVE_SPLICE 1
 # endif
 #endif
@@ -74,7 +72,7 @@ char *lname, *iname, *oname, *bbname = NULL;
 off_t ipos, opos, xfer, lxfer, sxfer, fxfer, maxxfer, init_opos;
 
 int ides, odes, identical, pres;
-int o_dir_in, o_dir_out, splice;
+int o_dir_in, o_dir_out, dosplice;
 char i_chr, o_chr;
 
 FILE *logfd;
@@ -693,7 +691,7 @@ int main(int argc, char* argv[])
 	reverse = 0; dotrunc = 0; abwrerr = 0; sparse = 0; nosparse = 0;
 	verbose = 0; quiet = 0; interact = 0; force = 0; pres = 0;
 	lname = 0; iname = 0; oname = 0; o_dir_in = 0; o_dir_out = 0;
-	splice = 0;
+	dosplice = 0;
 
 	/* Initialization */
 	sxfer = 0; fxfer = 0; lxfer = 0; xfer = 0;
@@ -711,7 +709,7 @@ int main(int argc, char* argv[])
 			case 'D': o_dir_out = O_DIRECT; break;
 #endif
 #ifdef HAVE_SPLICE
-			case 'k': splice = 1; break;
+			case 'k': dosplice = 1; break;
 #endif				  
 			case 'p': pres = 1; break;
 			case 'a': sparse = 1; nosparse = 0; break;
@@ -868,7 +866,7 @@ int main(int argc, char* argv[])
 	if (o_chr) {
 		if (!nosparse)
 			fprintf(stderr, "dd_rescue: (warning): Don't use sparse writes for non-seekable output\n");
-		nosparse = 1; sparse = 0; splice = 0;
+		nosparse = 1; sparse = 0; dosplice = 0;
 	}
 
 	/* special case: reverse with ipos == 0 means ipos = end_of_file */
