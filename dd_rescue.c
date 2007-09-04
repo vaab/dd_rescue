@@ -55,6 +55,17 @@
 #include <sys/time.h>
 #include <sys/stat.h>
 
+/* splice */
+#ifdef __linux__
+# warning LINUX
+//# include <linux/syscalls.h>
+# ifdef __NR_splice
+#  warning splice
+#  define HAVE_SPLICE 1
+# endif
+#endif
+
+
 int softbs, hardbs, syncfreq;
 int maxerr, nrerr, reverse, dotrunc, abwrerr, sparse, nosparse;
 int verbose, quiet, interact, force;
@@ -63,7 +74,7 @@ char *lname, *iname, *oname, *bbname = NULL;
 off_t ipos, opos, xfer, lxfer, sxfer, fxfer, maxxfer, init_opos;
 
 int ides, odes, identical, pres;
-int o_dir_in, o_dir_out;
+int o_dir_in, o_dir_out, splice;
 char i_chr, o_chr;
 
 FILE *logfd;
@@ -621,6 +632,9 @@ void printhelp()
 #ifdef O_DIRECT
 	fprintf(stderr, "         -d/D       use O_DIRECT for input/output (def=no),\n");
 #endif
+#ifdef HAVE_SPLICE
+	fprintf(stderr, "         -k         use efficient in-kernel zerocopy splice\n");
+#endif       	
 	fprintf(stderr, "         -w         abort on Write errors (def=no),\n");
 	fprintf(stderr, "         -a         spArse file writing (def=no),\n");
 	fprintf(stderr, "         -A         Always write blocks, zeroed if err (def=no),\n");
@@ -679,13 +693,14 @@ int main(int argc, char* argv[])
 	reverse = 0; dotrunc = 0; abwrerr = 0; sparse = 0; nosparse = 0;
 	verbose = 0; quiet = 0; interact = 0; force = 0; pres = 0;
 	lname = 0; iname = 0; oname = 0; o_dir_in = 0; o_dir_out = 0;
+	splice = 0;
 
 	/* Initialization */
 	sxfer = 0; fxfer = 0; lxfer = 0; xfer = 0;
 	ides = -1; odes = -1; logfd = 0; nrerr = 0; buf = 0;
 	i_chr = 0; o_chr = 0;
 
-	while ((c = getopt(argc, argv, ":rtfihqvVwaAdDpb:B:m:e:s:S:l:o:y:")) != -1) {
+	while ((c = getopt(argc, argv, ":rtfihqvVwaAdDkpb:B:m:e:s:S:l:o:y:")) != -1) {
 		switch (c) {
 			case 'r': reverse = 1; break;
 			case 't': dotrunc = O_TRUNC; break;
@@ -695,6 +710,9 @@ int main(int argc, char* argv[])
 			case 'd': o_dir_in  = O_DIRECT; break;
 			case 'D': o_dir_out = O_DIRECT; break;
 #endif
+#ifdef HAVE_SPLICE
+			case 'k': splice = 1; break;
+#endif				  
 			case 'p': pres = 1; break;
 			case 'a': sparse = 1; nosparse = 0; break;
 			case 'A': nosparse = 1; sparse = 0; break;
@@ -850,7 +868,7 @@ int main(int argc, char* argv[])
 	if (o_chr) {
 		if (!nosparse)
 			fprintf(stderr, "dd_rescue: (warning): Don't use sparse writes for non-seekable output\n");
-		nosparse = 1; sparse = 0;
+		nosparse = 1; sparse = 0; splice = 0;
 	}
 
 	/* special case: reverse with ipos == 0 means ipos = end_of_file */
