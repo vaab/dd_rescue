@@ -601,6 +601,32 @@ int copyfile_softbs(const off_t max)
 	return errs;
 }
 
+#ifdef HAVE_SPLICE
+int copyfile_splice(const off_t max)
+{
+	ssize_t toread;
+	int fd_pipe[2];
+	if (pipe(fd_pipe) < 0)
+		return copyfile_softbs(max);
+	while ((toread	= blockxfer(max, softbs)) > 0) {
+		ssize_t rd = sys_splice(ifd, &ipos, fd_pipe[1], NULL, toread,
+					SPLICE_F_MOVE | SPLICE_F_MORE);
+		if (rd < 0)
+			return copyfile_softbs(max);
+		if (rd == 0)
+			return 0;
+		while (rd) {
+			ssize_t wr = sys_splice(fd_pipe[0], NULL, ofd, &opos, rd,
+					SPLICE_F_MOVE | SPLICE_F_MORE);
+			if (wr < 0)
+				exit(23);
+			rd -= wr; xfer += wr; sxfer += wr;
+		}
+	}
+	return 0;
+}
+#endif
+
 int copyperm(int ifd, int ofd)
 {
 	int err; 
