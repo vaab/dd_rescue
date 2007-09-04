@@ -60,7 +60,7 @@
 # include <asm/unistd.h>
 # ifdef __NR_splice
 #  define HAVE_SPLICE 1
-static inline int sys_splice(int fdin, loff_t *off_in, int fdout, loff_t *offout,
+static inline int sys_splice(int fdin, loff_t *off_in, int fdout, loff_t *off_out,
 		             size_t len, unsigned int flags)
 {
 	return syscall(__NR_splice, fdin, off_in, fdout, off_out, len, flags);
