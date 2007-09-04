@@ -90,8 +90,6 @@ const char* up = UP;
 const char* down = DOWN;
 const char* right = RIGHT;
 
-int lastsparse = 0;
-
 inline float difftimetv(const struct timeval* const t2, 
 			const struct timeval* const t1)
 {
@@ -396,6 +394,45 @@ void exitfatalerr()
 }
 
 
+void advancepos(const ssize_t rd, const ssize_t wr)
+{
+	sxfer += wr; xfer += rd;
+	if (reverse) { 
+		ipos -= rd; opos -= rd; 
+	} else { 
+		ipos += rd; opos += rd; 
+	}
+}
+
+int dowrite(const ssize_t rd)
+{
+	int errs = 0;
+	/* errno == 0: We can write to disk */
+	ssize_t wr = 0;
+	if (!sparse || blockiszero(buf, rd) < rd)
+		errs += ((wr = writeblock(rd)) < rd ? 1: 0);
+	advancepos(rd, wr);
+	if (wr < 0 && (errno == ENOSPC 
+		   || (errno == EFBIG && !reverse))) 
+		return -errs;
+	if (rd != wr && !sparse) {
+		fplog(stderr, "dd_rescue: (warning): assumption rd(%i) == wr(%i) failed! \n", rd, wr);
+		fplog(stderr, "dd_rescue: (warning): %s (%.1fk): %s!\n", 
+		      oname, (float)opos/1024, strerror(errno));
+		fprintf(stderr, "%s%s", down, down);
+		errno = 0;
+	}
+	return errs;
+}
+
+int partialwrite(const ssize_t rd)
+{
+	/* But first: write available data and advance (optimization) */
+	if (rd > 0 && !reverse) 
+		return dowrite(rd);
+	return 0;	
+}
+
 int copyfile_hardbs(const off_t max)
 {
 	ssize_t toread;
@@ -407,11 +444,7 @@ int copyfile_hardbs(const off_t max)
 		down, down, down);
 #endif
 	while ((toread = blockxfer(max, hardbs)) > 0) { 
-		ssize_t rd = 0;
-
-		if (nosparse)
-			memset(buf, 0, hardbs);
-		rd = readblock(toread);
+		ssize_t rd = readblock(toread);
 
 		/* EOF */
 		if (rd == 0 && !errno) {
@@ -422,9 +455,9 @@ int copyfile_hardbs(const off_t max)
 		}
 		/* READ ERROR */
 		if (rd < toread/* && errno*/) {
+			++errs;
 			/* Read error occurred: Print warning */
 			printstatus(stderr, logfd, hardbs, 1); 
-			errs++;
 			/* Some errnos are fatal */
 			exitfatalerr();
 			/* Non fatal error */
@@ -439,12 +472,13 @@ int copyfile_hardbs(const off_t max)
 				cleanup(); exit(32);
 			}
 			fprintf(stderr, "%s%s%s", down, down, down);
-			/* advance */
+			
 			errno = 0;
-			if (nosparse) {
+			if (nosparse || 
+			    (rd > 0 && (!sparse || blockiszero(buf, rd) < rd))) {
 				ssize_t wr = 0;
+				memset(buf+rd, 0, toread-rd);
 				errs += ((wr = writeblock(toread)) < toread ? 1: 0);
-				lastsparse = 0;
 				if (wr < 0 && (errno == ENOSPC 
 					   || (errno == EFBIG && !reverse))) 
 					return errs;
@@ -465,32 +499,12 @@ int copyfile_hardbs(const off_t max)
 				ipos += toread; opos += toread; 
 			}
 		} else {
-	      		/* errno == 0: We can write to disk */
-      			if (rd > 0) {
-				ssize_t wr = 0;
-				if (!sparse || blockiszero(buf, hardbs) < rd) {
-					errs += ((wr = writeblock(rd)) < rd ? 1: 0);
-					lastsparse = 0;
-				} else
-					lastsparse = 1;
-				sxfer += wr; xfer += rd;
-				if (reverse) { 
-					ipos -= rd; opos -= rd; 
-				} else { 
-					ipos += rd; opos += rd; 
-				}
-				if (wr < 0 && (errno == ENOSPC 
-					   || (errno == EFBIG && !reverse))) 
-					return errs;
-				if (rd != wr && !sparse) {
-					fplog(stderr, "dd_rescue: (warning): assumption rd(%i) == wr(%i) failed! \n", rd, wr);
-					fplog(stderr, "dd_rescue: (warning): %s (%.1fk): %s!\n", 
-					      oname, (float)opos/1024, strerror(errno));
-					fprintf(stderr, "%s%s", down, down);
-					errno = 0;
-				}
-			} /* rd > 0 */
-		} /* errno */
+	      		int err = dowrite(rd);
+			if (err < 0)
+				return -err;
+			else
+				errs += err;
+		}
 
 		if (syncfreq && !(xfer % (syncfreq*softbs)))
 			printstatus((quiet? 0: stderr), 0, hardbs, 1);
@@ -515,10 +529,8 @@ int copyfile_softbs(const off_t max)
 	if (!o_chr)
 		pwrite(odes, buf, 0, opos);
 	while ((toread = blockxfer(max, softbs)) > 0) { 
-		ssize_t rd = 0;
 		int err;
-
-		rd = readblock(toread);
+		ssize_t rd = readblock(toread);
 
 		/* EOF */
 		if (rd == 0 && !errno) {
@@ -529,49 +541,24 @@ int copyfile_softbs(const off_t max)
 		}
 		/* READ ERROR */
 		if (rd < toread/* && errno*/) {
+			int ret;
+			++errs;
 			/* Read error occurred: Print warning */
 			printstatus(stderr, logfd, softbs, 1); 
-			errs++;
 			/* Some errnos are fatal */
 			exitfatalerr();
 			/* Non fatal error */
 			off_t new_max = xfer + toread;
-			off_t old_xfer;
 			/* Error with large blocks: Try small ones ... */
 			if (verbose) 
 				fprintf(stderr, "dd_rescue: (info): problems at ipos %.1fk: %s \n                 fall back to smaller blocksize \n%s%s%s",
 				        (float)ipos/1024, strerror(errno), down, down, down);
 			/* But first: write available data and advance (optimization) */
-			if (rd > 0) {
-				ssize_t wr = 0; errno = 0;
-				if (!sparse || blockiszero(buf, softbs) < rd) {
-					errs += ((wr = writeblock(rd)) < rd ? 1: 0);
-					lastsparse = 0;
-				} else
-					lastsparse = 1;
-
-				if (!reverse) {
-					ipos += rd; opos += rd; 
-					sxfer += wr; xfer += rd;
-				}
-				/* 
-				else {
-					new_max -= rd;
-				}
-				 */
-				if (wr < 0 && (errno == ENOSPC 
-					   || (errno == EFBIG && !reverse))) 
-					return errs;
-				if (rd != wr && !sparse) {
-					fplog(stderr, "dd_rescue: (warning): assumption rd(%i) == wr(%i) failed! \n", rd, wr);
-					/*
-					fplog(stderr, "dd_rescue: (warning): %s (%.1fk): %s!\n", 
-					      oname, (float)opos/1024, strerror(errno));
-					fprintf(stderr, "%s%s%s", down, down, down);
-				 	 */
-				}
-			} /* rd > 0 */
-			old_xfer = xfer;
+			if ((ret = partialwrite(rd)) < 0)
+				return ret;
+			else
+				errs += ret;
+			off_t old_xfer = xfer;
 			errs += (err = copyfile_hardbs(new_max));
 			/* EOF */
 			if (!err && old_xfer == xfer)
@@ -599,31 +586,11 @@ int copyfile_softbs(const off_t max)
 				fprintf(stderr, "dd_rescue: (info): ipos %.1fk promote to large bs again! \n%s%s%s",
 					(float)ipos/1024, down, down, down);
 		} else {
-			/* errno == 0: We can write to disk */
-			if (rd > 0) {
-				ssize_t wr = 0;
-				if (!sparse || blockiszero(buf, softbs) < rd) {
-					errs += ((wr = writeblock(rd)) < rd ? 1: 0);
-					lastsparse = 0;
-				} else
-					lastsparse = 1;
-				sxfer += wr; xfer += rd;
-				if (reverse) { 
-					ipos -= rd; opos -= rd; 
-				} else { 
-					ipos += rd; opos += rd; 
-				}
-				if (wr < 0 && (errno == ENOSPC 
-					   || (errno == EFBIG && !reverse))) 
-					return errs;
-				if (rd != wr && !sparse) {
-					fplog(stderr, "dd_rescue: (warning): assumption rd(%i) == wr(%i) failed! \n", rd, wr);
-					fplog(stderr, "dd_rescue: (warning): %s (%.1fk): %s!\n", 
-					      oname, (float)opos/1024, strerror(errno));
-					fprintf(stderr, "%s%s", down, down);
-					errno = 0;
-				}
-			} /* rd > 0 */
+	      		int err = dowrite(rd);
+			if (err < 0)
+				return -err;
+			else
+				errs += err;
 		} /* errno */
 
 		if (syncfreq && !(xfer % (syncfreq*softbs)))
