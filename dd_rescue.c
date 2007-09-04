@@ -384,6 +384,18 @@ int blockxfer(const off_t max, const int bs)
 	return block;
 }
 
+void exitfatalerr()
+{
+	if (errno == ESPIPE || errno == EPERM || errno == ENXIO || errno == ENODEV) {
+		fplog(stderr, "dd_rescue: (warning): %s (%.1fk): %s!\n", 
+		      iname, (float)ipos/1024, strerror(errno));
+		fplog(stderr, "dd_rescue: Last error fatal! Exiting ...\n");
+		cleanup();
+		exit(20);
+	}
+}
+
+
 int copyfile_hardbs(const off_t max)
 {
 	ssize_t toread;
@@ -414,14 +426,9 @@ int copyfile_hardbs(const off_t max)
 			printstatus(stderr, logfd, hardbs, 1); 
 			errs++;
 			/* Some errnos are fatal */
-			if (errno == ESPIPE || errno == EPERM || errno == ENXIO || errno == ENODEV) {
-				fplog(stderr, "dd_rescue: (warning): %s (%.1fk): %s!\n", 
-				      iname, (float)ipos/1024, strerror(errno));
-				fplog(stderr, "dd_rescue: Last error fatal! Exiting ...\n");
-				cleanup(); exit(20);
-			}
+			exitfatalerr();
 			/* Non fatal error */
-			/* Real error: Don't retry */
+			/* Real error on small blocks: Don't retry */
 			nrerr++; 
 			fplog(stderr, "dd_rescue: (warning): %s (%.1fk): %s!\n", 
 			      iname, (float)ipos/1024, strerror(errno));
@@ -522,17 +529,12 @@ int copyfile_softbs(const off_t max)
 		}
 		/* READ ERROR */
 		if (rd < toread/* && errno*/) {
-		/* Read error occurred: Print warning */
-		printstatus(stderr, logfd, softbs, 1); 
-		errs++;
-		/* Some errnos are fatal */
-		if (errno == ESPIPE || errno == EPERM || errno == ENXIO || errno == ENODEV) {
-			fplog(stderr, "dd_rescue: (warning): %s (%.1fk): %s!\n", 
-			      iname, (float)ipos/1024, strerror(errno));
-			fplog(stderr, "dd_rescue: Last error fatal! Exiting ...\n");
-			cleanup(); exit(20);
-		}
-		/* Non fatal error */
+			/* Read error occurred: Print warning */
+			printstatus(stderr, logfd, softbs, 1); 
+			errs++;
+			/* Some errnos are fatal */
+			exitfatalerr();
+			/* Non fatal error */
 			off_t new_max = xfer + toread;
 			off_t old_xfer;
 			/* Error with large blocks: Try small ones ... */
@@ -597,8 +599,8 @@ int copyfile_softbs(const off_t max)
 				fprintf(stderr, "dd_rescue: (info): ipos %.1fk promote to large bs again! \n%s%s%s",
 					(float)ipos/1024, down, down, down);
 		} else {
-	      		/* errno == 0: We can write to disk */
-      			if (rd > 0) {
+			/* errno == 0: We can write to disk */
+			if (rd > 0) {
 				ssize_t wr = 0;
 				if (!sparse || blockiszero(buf, softbs) < rd) {
 					errs += ((wr = writeblock(rd)) < rd ? 1: 0);
