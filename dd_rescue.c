@@ -609,14 +609,14 @@ int copyfile_splice(const off_t max)
 	if (pipe(fd_pipe) < 0)
 		return copyfile_softbs(max);
 	while ((toread	= blockxfer(max, softbs)) > 0) {
-		ssize_t rd = sys_splice(ifd, &ipos, fd_pipe[1], NULL, toread,
+		ssize_t rd = sys_splice(ides, &ipos, fd_pipe[1], NULL, toread,
 					SPLICE_F_MOVE | SPLICE_F_MORE);
 		if (rd < 0)
 			return copyfile_softbs(max);
 		if (rd == 0)
 			return 0;
 		while (rd) {
-			ssize_t wr = sys_splice(fd_pipe[0], NULL, ofd, &opos, rd,
+			ssize_t wr = sys_splice(fd_pipe[0], NULL, odes, &opos, rd,
 					SPLICE_F_MOVE | SPLICE_F_MORE);
 			if (wr < 0)
 				exit(23);
