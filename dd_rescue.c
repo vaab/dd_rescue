@@ -60,8 +60,8 @@
 # include <asm/unistd.h>
 # ifdef __NR_splice
 #  define HAVE_SPLICE 1
-static inline int sys_splice(int fdin, loff_t *off_in, int fdout, loff_t *off_out,
-		             size_t len, unsigned int flags)
+static inline int sys_splice(int fdin, loff_t *off_in, int fdout, 
+			     loff_t *off_out, size_t len, unsigned int flags)
 {
 	return syscall(__NR_splice, fdin, off_in, fdout, off_out, len, flags);
 }
@@ -618,9 +618,13 @@ int copyfile_splice(const off_t max)
 					SPLICE_F_MOVE | SPLICE_F_MORE);
 		if (rd < 0) {
 			close(fd_pipe[0]); close(fd_pipe[1]);
+			fplog(stderr, "dd_rescue: (info): %s (%.1fk): fall back to userspace copy\n%s%s%s", 
+			      iname, (float)ipos/1024, down, down, down);
 			return copyfile_softbs(max);
 		}
 		if (rd == 0) {
+			fplog(stderr, "dd_rescue: (info): %s (%.1fk): EOF (splice)\n", 
+			      iname, (float)ipos/1024);
 			close(fd_pipe[0]); close(fd_pipe[1]);
 			return 0;
 		}
@@ -631,8 +635,13 @@ int copyfile_splice(const off_t max)
 				close(fd_pipe[0]); close(fd_pipe[1]);
 				exit(23);
 			}
-			rd -= wr; xfer += wr; sxfer += wr;
+			rd -= wr; //xfer += wr; sxfer += wr;
 		}
+		advancepos(rd, rd);
+		if (syncfreq && !(xfer % (syncfreq*softbs)))
+			printstatus((quiet? 0: stderr), 0, softbs, 1);
+		else if (!quiet && !(xfer % (16*softbs)))
+			printstatus(stderr, 0, softbs, 0);
 	}
 	close(fd_pipe[0]); close(fd_pipe[1]);
 	return 0;
@@ -1029,7 +1038,10 @@ int main(int argc, char* argv[])
 		printstatus(stderr, 0, softbs, 0);
 	}
 
-	c = copyfile_softbs(maxxfer);
+	if (dosplice)
+		c = copyfile_splice(maxxfer);
+	else
+		c = copyfile_softbs(maxxfer);
 	gettimeofday(&currenttime, NULL);
 	printreport();
 	cleanup();
