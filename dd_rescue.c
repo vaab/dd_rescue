@@ -47,24 +47,32 @@
 #include <string.h>
 #include <ctype.h>
 #include <getopt.h>
-#include <fcntl.h>
 #include <errno.h>
 #include <signal.h>
 #include <time.h>
 #include <utime.h>
 #include <sys/time.h>
 #include <sys/stat.h>
+// hack around buggy splice definition(!)
+#define splice oldsplice
+#include <fcntl.h>
+#undef splice
 
 /* splice */
 #ifdef __linux__
+# define __KERNEL__
 # include <asm/unistd.h>
 # ifdef __NR_splice
 #  define HAVE_SPLICE 1
-static inline int sys_splice(int fdin, loff_t *off_in, int fdout, 
-			     loff_t *off_out, size_t len, unsigned int flags)
+#  if 0
+static inline long sys_splice(int fdin, loff_t *off_in, int fdout, 
+			      loff_t *off_out, size_t len, unsigned int flags)
 {
 	return syscall(__NR_splice, fdin, off_in, fdout, off_out, len, flags);
 }
+#  else
+_syscall6(long, splice, int, fdin, loff_t*, off_in, int, fdout, loff_t*, off_out, size_t, len, unsigned int, flags);
+#  endif
 # endif
 #endif
 
@@ -614,7 +622,7 @@ int copyfile_splice(const off_t max)
 	if (pipe(fd_pipe) < 0)
 		return copyfile_softbs(max);
 	while ((toread	= blockxfer(max, softbs)) > 0) {
-		ssize_t rd = sys_splice(ides, &ipos, fd_pipe[1], NULL, toread,
+		ssize_t rd = splice(ides, &ipos, fd_pipe[1], NULL, toread,
 					SPLICE_F_MOVE | SPLICE_F_MORE);
 		if (rd < 0) {
 			close(fd_pipe[0]); close(fd_pipe[1]);
@@ -629,7 +637,7 @@ int copyfile_splice(const off_t max)
 			return 0;
 		}
 		while (rd) {
-			ssize_t wr = sys_splice(fd_pipe[0], NULL, odes, &opos, rd,
+			ssize_t wr = splice(fd_pipe[0], NULL, odes, &opos, rd,
 					SPLICE_F_MOVE | SPLICE_F_MORE);
 			if (wr < 0) {
 				close(fd_pipe[0]); close(fd_pipe[1]);
