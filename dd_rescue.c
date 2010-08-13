@@ -260,7 +260,7 @@ void input_length()
 		estxfer = maxxfer;
 	fplog(stderr, "dd_rescue: (info) expect to copy %likB from %s\n",
 			estxfer/1024, iname);
-	preparegraph();
+	//preparegraph();
 }
 
 
