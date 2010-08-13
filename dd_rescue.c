@@ -221,7 +221,7 @@ void printstatus(FILE* const file1, FILE* const file2,
 
 	if (sync) {
 		int err = fsync(odes);
-		if (err)
+		if (err && errno != EINVAL)
 			fplog(stderr, "dd_rescue: (warning): sync %s (%.1fk): %s!  \n",
 			      oname, (float)ipos/1024, strerror(errno));
 	}
@@ -244,7 +244,7 @@ void printstatus(FILE* const file1, FILE* const file2,
 void savebb(int block)
 {
 	FILE *bbfile;
-	fplog(stderr, "Bad block: %d\n", block);
+	fplog(stderr, "Bad block reading %s: %d\n", iname, block);
 	if (bbname == NULL)
 		return;
 	bbfile = fopen(bbname, "a");
@@ -286,26 +286,26 @@ int cleanup()
 		pwrite(odes, buf, 0, opos);
 		rc = fsync(odes);
 		if (rc) {
-			fplog(stderr, "dd_rescue: (warning): %s (%.1fk): %s!\n", 
+			fplog(stderr, "dd_rescue: (warning): fsync %s (%.1fk): %s!\n", 
 			      oname, (float)opos/1024, strerror(errno));
 			++errs;
 		}
 		rc = close(odes); 
 		if (rc) {
-			fplog(stderr, "dd_rescue: (warning): %s (%.1fk): %s!\n", 
+			fplog(stderr, "dd_rescue: (warning): close %s (%.1fk): %s!\n", 
 			      oname, (float)opos/1024, strerror(errno));
 			++errs;
 		}
 		if (sparse)
 			rc = mayexpandfile();
 			if (rc)
-				fplog(stderr, "dd_rescue: (warning): %s (%1.fk): %s!\n",
+				fplog(stderr, "dd_rescue: (warning): seek %s (%1.fk): %s!\n",
 				      oname, (float)opos/1024, strerror(errno));
 	}
 	if (ides != -1) {
 		rc = close(ides);
 		if (rc) {
-			fplog(stderr, "dd_rescue: (warning): %s (%.1fk): %s!\n", 
+			fplog(stderr, "dd_rescue: (warning): close %s (%.1fk): %s!\n", 
 			      iname, (float)ipos/1024, strerror(errno));
 			++errs;
 		}
@@ -370,7 +370,7 @@ ssize_t writeblock(const int towrite)
 		  || (wr < towrite && err > 0 && errno == 0));
 	if (wr < towrite && err != 0) {
 		/* Write error: handle ? .. */
-		fplog(stderr, "dd_rescue: (%s): %s (%.1fk): %s\n",
+		fplog(stderr, "dd_rescue: (%s): write %s (%.1fk): %s\n",
 		      (abwrerr? "fatal": "warning"),
 		      oname, (float)opos/1024, strerror(errno));
 		if (abwrerr) {
@@ -478,7 +478,7 @@ int copyfile_hardbs(const off_t max)
 			/* Non fatal error */
 			/* Real error on small blocks: Don't retry */
 			nrerr++; 
-			fplog(stderr, "dd_rescue: (warning): %s (%.1fk): %s!\n", 
+			fplog(stderr, "dd_rescue: (warning): read %s (%.1fk): %s!\n", 
 			      iname, (float)ipos/1024, strerror(errno));
 			/* exit if too many errs */
 			if (maxerr && nrerr >= maxerr) {
@@ -550,7 +550,7 @@ int copyfile_softbs(const off_t max)
 		/* EOF */
 		if (rd == 0 && !errno) {
 			if (!errs)
-				fplog(stderr, "dd_rescue: (info): %s (%.1fk): EOF\n", 
+				fplog(stderr, "dd_rescue: (info): read %s (%.1fk): EOF\n", 
 				      iname, (float)ipos/1024);
 			return errs;
 		}
@@ -633,7 +633,7 @@ int copyfile_splice(const off_t max)
 			return copyfile_softbs(max);
 		}
 		if (rd == 0) {
-			fplog(stderr, "dd_rescue: (info): %s (%.1fk): EOF (splice)\n", 
+			fplog(stderr, "dd_rescue: (info): read %s (%.1fk): EOF (splice)\n", 
 			      iname, (float)ipos/1024);
 			close(fd_pipe[0]); close(fd_pipe[1]);
 			return 0;
