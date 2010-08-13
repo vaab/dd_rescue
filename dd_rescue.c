@@ -283,7 +283,7 @@ void doprint(FILE* const file, const int bs, const clock_t cl,
 			right, right, right, right, right, right, right, right, right,
 			(float)xfer/(t1*1024),
 			100.0*(cl-startclock)/(CLOCKS_PER_SEC*t1));
-	if (estxfer) {
+	if (estxfer && avgrate > 0) {
 		int sec = (estxfer-xfer)/(1024*avgrate);
 		int hour = sec / 3600;
 		int min = (sec % 3600) / 60;
@@ -301,6 +301,7 @@ void printstatus(FILE* const file1, FILE* const file2,
 {
 	float t1, t2; 
 	clock_t cl;
+	static int einvalwarn = 0;
 
 	if (file1 == stderr || file1 == stdout) 
 		fprintf(file1, "%s%s%s%s", up, up, up, up);
@@ -309,9 +310,11 @@ void printstatus(FILE* const file1, FILE* const file2,
 
 	if (sync) {
 		int err = fsync(odes);
-		if (err && errno != EINVAL)
+		if (err && (errno != EINVAL || !einvalwarn)) {
 			fplog(stderr, "dd_rescue: (warning): sync %s (%.1fk): %s!  \n",
 			      oname, (float)ipos/1024, strerror(errno));
+			++einvalwarn;
+		}
 	}
 
 	gettimeofday(&currenttime, NULL);
