@@ -212,7 +212,10 @@ void preparegraph()
 
 void updgraph(int err)
 {
-	int off = gpos(ipos);
+	int off;
+	if (!ilen)
+		return;
+	off = gpos(ipos);
 	if (graph[off] == 'x')
 		return;
 	if (err)
