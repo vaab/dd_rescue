@@ -327,7 +327,7 @@ void printstatus(FILE* const file1, FILE* const file2,
 		doprint(file1, bs, cl, t1, t2, sync);
 	if (file2)
 		doprint(file2, bs, cl, t1, t2, sync);
-	if (sync || (!syncfreq && !(called++%8))) {
+	if (sync || (!syncfreq && !(called++%16))) {
 		memcpy(&lasttime, &currenttime, sizeof(lasttime));
 		lxfer = xfer;
 	}
