@@ -20,6 +20,7 @@
  * TODO:
  * - Use termcap to fetch cursor up/down codes
  * - Better handling of write errors: also try sub blocks
+ * - Optional colors
  * - Estimate total amount of data to copy, display progress and ETA
  * - Optionally use fallocate to preallocate space on the target
  */
@@ -464,7 +465,7 @@ int copyfile_hardbs(const off_t max)
 		/* EOF */
 		if (rd == 0 && !errno) {
 			if (!errs)
-				fplog(stderr, "dd_rescue: (info): %s (%.1fk): EOF\n", 
+				fplog(stderr, "dd_rescue: (info): read %s (%.1fk): EOF\n", 
 				      iname, (float)ipos/1024);
 			return errs;
 		}
