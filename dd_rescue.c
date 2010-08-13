@@ -983,7 +983,7 @@ int main(int argc, char* argv[])
 
 	/* Set sync frequency */
 	if (syncsz == -1)
-		syncfreq = 512;
+		syncfreq = 0;
 	else if (syncsz == 0)
 		syncfreq = 0;
 	else
