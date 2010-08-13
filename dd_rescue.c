@@ -21,7 +21,6 @@
  * - Use termcap to fetch cursor up/down codes
  * - Better handling of write errors: also try sub blocks
  * - Optional colors
- * - Estimate total amount of data to copy, display progress and ETA
  * - Optionally use fallocate to preallocate space on the target
  */
 
