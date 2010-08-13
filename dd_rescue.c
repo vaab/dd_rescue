@@ -284,7 +284,7 @@ void doprint(FILE* const file, const int bs, const clock_t cl,
 			(float)xfer/(t1*1024),
 			100.0*(cl-startclock)/(CLOCKS_PER_SEC*t1));
 	if (estxfer && avgrate > 0) {
-		int sec = (estxfer-xfer)/(1024*avgrate);
+		int sec = (estxfer-xfer)/(1024*avgrate) + 0.5;
 		int hour = sec / 3600;
 		int min = (sec % 3600) / 60;
 		sec = sec % 60;
