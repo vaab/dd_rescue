@@ -9,8 +9,8 @@
  * This tool is thus suitable for rescueing data of crashed disk,
  * and that's the reason it has been written by me.
  *
- * (c) Kurt Garloff <garloff@suse.de>, 11/97, 10/99
- * Copyright: GNU GPL
+ * (c) Kurt Garloff <garloff@suse.de>, 11/97, 10/99, 2003 -- 2010
+ * Copyright: GNU GPL v2 or v3.
  *
  * Improvements from LAB Valentin, see
  * http://www.tharbad.ath.cx/~vaab/kalysto/Utilities/dd_rhelp/dd_rhelp_en.html
