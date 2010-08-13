@@ -64,8 +64,8 @@
 # include <asm/unistd.h>
 # ifdef __NR_splice
 #  define HAVE_SPLICE 1
-#  if 0
-static inline long sys_splice(int fdin, loff_t *off_in, int fdout, 
+#  if 1
+static inline long splice(int fdin, loff_t *off_in, int fdout, 
 			      loff_t *off_out, size_t len, unsigned int flags)
 {
 	return syscall(__NR_splice, fdin, off_in, fdout, off_out, len, flags);
@@ -643,9 +643,9 @@ int copyfile_splice(const off_t max)
 				close(fd_pipe[0]); close(fd_pipe[1]);
 				exit(23);
 			}
-			rd -= wr; //xfer += wr; sxfer += wr;
+			rd -= wr; xfer += wr; sxfer += wr;
 		}
-		advancepos(rd, rd);
+		advancepos(0, 0);
 		if (syncfreq && !(xfer % (syncfreq*softbs)))
 			printstatus((quiet? 0: stderr), 0, softbs, 1);
 		else if (!quiet && !(xfer % (16*softbs)))
