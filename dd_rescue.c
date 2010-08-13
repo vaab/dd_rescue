@@ -260,7 +260,7 @@ void input_length()
 		estxfer = maxxfer;
 	fplog(stderr, "dd_rescue: (info) expect to copy %likB from %s\n",
 			estxfer/1024, iname);
-	//preparegraph();
+	preparegraph();
 }
 
 
@@ -291,9 +291,9 @@ void printstatus(FILE* const file1, FILE* const file2,
 	clock_t cl;
 
 	if (file1 == stderr || file1 == stdout) 
-		fprintf(file1, "%s%s%s", up, up, up);
+		fprintf(file1, "%s%s%s%s", up, up, up, up);
 	if (file2 == stderr || file2 == stdout) 
-		fprintf(file2, "%s%s%s", up, up, up);
+		fprintf(file2, "%s%s%s%s", up, up, up, up);
 
 	if (sync) {
 		int err = fsync(odes);
@@ -334,7 +334,7 @@ void printreport()
 	FILE *report = (!quiet || nrerr)? stderr: 0;
 	fplog(report, "Summary for %s -> %s:\n", iname, oname);
 	if (report)
-		fprintf(stderr, "%s%s%s", down, down, down);
+		fprintf(stderr, "%s%s%s%s", down, down, down, down);
 	printstatus(report, logfd, 0, 1);
 }
 
@@ -510,7 +510,7 @@ int dowrite(const ssize_t rd)
 		fplog(stderr, "dd_rescue: (warning): assumption rd(%i) == wr(%i) failed! \n", rd, wr);
 		fplog(stderr, "dd_rescue: (warning): %s (%.1fk): %s!\n", 
 		      oname, (float)opos/1024, strerror(errno));
-		fprintf(stderr, "%s%s", down, down);
+		fprintf(stderr, "%s%s%s", down, down, down);
 		errno = 0;
 	}
 	return errs;
@@ -529,10 +529,10 @@ int copyfile_hardbs(const off_t max)
 	ssize_t toread;
 	int errs = 0; errno = 0;
 #if 0	
-	fprintf(stderr, "%s%s%s copyfile (ipos=%.1fk, xfer=%.1fk, max=%.1fk, bs=%i)                         ##\n%s%s%s",
-		up, up, up,
+	fprintf(stderr, "%s%s%s%s copyfile (ipos=%.1fk, xfer=%.1fk, max=%.1fk, bs=%i)                         ##\n%s%s%s%s",
+		up, up, up, up,
 		(float)ipos/1024, (float)xfer/1024, (float)max/1024, hardbs,
-		down, down, down);
+		down, down, down, down);
 #endif
 	while ((toread = blockxfer(max, hardbs)) > 0) { 
 		ssize_t rd = readblock(toread);
@@ -562,7 +562,7 @@ int copyfile_hardbs(const off_t max)
 				printreport();
 				cleanup(); exit(32);
 			}
-			fprintf(stderr, "%s%s%s", down, down, down);
+			fprintf(stderr, "%s%s%s%s", down, down, down, down);
 			
 			errno = 0;
 			if (nosparse || 
@@ -578,7 +578,7 @@ int copyfile_hardbs(const off_t max)
 					/*
 					fplog(stderr, "dd_rescue: (warning): %s (%.1fk): %s!\n", 
 					      oname, (float)opos/1024, strerror(errno));
-					fprintf(stderr, "%s%s%s", down, down, down);
+					fprintf(stderr, "%s%s%s%s", down, down, down, down);
 				 	*/
 				}
 			}
@@ -610,10 +610,10 @@ int copyfile_softbs(const off_t max)
 	ssize_t toread;
 	int errs = 0; errno = 0;
 #if 0	
-	fprintf(stderr, "%s%s%s copyfile (ipos=%.1fk, xfer=%.1fk, max=%.1fk, bs=%i)                         ##\n%s%s%s",
-		up, up, up,
+	fprintf(stderr, "%s%s%s%s copyfile (ipos=%.1fk, xfer=%.1fk, max=%.1fk, bs=%i)                         ##\n%s%s%s%s",
+		up, up, up, up,
 		(float)ipos/1024, (float)xfer/1024, (float)max/1024, softbs,
-		down, down, down);
+		down, down, down, down);
 #endif
 	/* expand file to AT LEAST the right length 
 	 * FIXME: 0 byte writes do NOT expand file */
@@ -642,8 +642,8 @@ int copyfile_softbs(const off_t max)
 			off_t new_max = xfer + toread;
 			/* Error with large blocks: Try small ones ... */
 			if (verbose) 
-				fprintf(stderr, "dd_rescue: (info): problems at ipos %.1fk: %s \n                 fall back to smaller blocksize \n%s%s%s",
-				        (float)ipos/1024, strerror(errno), down, down, down);
+				fprintf(stderr, "dd_rescue: (info): problems at ipos %.1fk: %s \n                 fall back to smaller blocksize \n%s%s%s%s",
+				        (float)ipos/1024, strerror(errno), down, down, down, down);
 			/* But first: write available data and advance (optimization) */
 			if ((ret = partialwrite(rd)) < 0)
 				return ret;
@@ -674,8 +674,8 @@ int copyfile_softbs(const off_t max)
 			if (!err && xfer == old_xfer)
 				return errs;
 			if (verbose) 
-				fprintf(stderr, "dd_rescue: (info): ipos %.1fk promote to large bs again! \n%s%s%s",
-					(float)ipos/1024, down, down, down);
+				fprintf(stderr, "dd_rescue: (info): ipos %.1fk promote to large bs again! \n%s%s%s%s",
+					(float)ipos/1024, down, down, down, down);
 		} else {
 	      		int err = dowrite(rd);
 			if (err < 0)
@@ -704,8 +704,8 @@ int copyfile_splice(const off_t max)
 					SPLICE_F_MOVE | SPLICE_F_MORE);
 		if (rd < 0) {
 			close(fd_pipe[0]); close(fd_pipe[1]);
-			fplog(stderr, "dd_rescue: (info): %s (%.1fk): fall back to userspace copy\n%s%s%s", 
-			      iname, (float)ipos/1024, down, down, down);
+			fplog(stderr, "dd_rescue: (info): %s (%.1fk): fall back to userspace copy\n%s%s%s%s", 
+			      iname, (float)ipos/1024, down, down, down, down);
 			return copyfile_softbs(max);
 		}
 		if (rd == 0) {
@@ -1126,7 +1126,7 @@ int main(int argc, char* argv[])
 	memcpy(&lasttime, &starttime, sizeof(lasttime));
 
 	if (!quiet) {
-		fprintf(stderr, "%s%s%s", down, down, down);
+		fprintf(stderr, "%s%s%s%s", down, down, down, down);
 		printstatus(stderr, 0, softbs, 0);
 	}
 
