@@ -220,7 +220,7 @@ void printstatus(FILE* const file1, FILE* const file2,
 	if (sync) {
 		int err = fsync(odes);
 		if (err)
-			fplog(stderr, "dd_rescue: (warning): %s (%.1fk): %s!    \n", 
+			fplog(stderr, "dd_rescue: (warning): sync %s (%.1fk): %s!  \n",
 			      oname, (float)ipos/1024, strerror(errno));
 	}
 
@@ -233,7 +233,7 @@ void printstatus(FILE* const file1, FILE* const file2,
 		doprint(file1, bs, cl, t1, t2, sync);
 	if (file2)
 		doprint(file2, bs, cl, t1, t2, sync);
-	if (sync) {
+	if (1 || sync) {
 		memcpy(&lasttime, &currenttime, sizeof(lasttime));
 		lxfer = xfer;
 	}
@@ -1023,6 +1023,11 @@ int main(int argc, char* argv[])
 		cleanup(); exit(19);
 	}
 		
+
+	if (dosplice) {
+		fplog(stderr, "dd_rescue: splice copy, ignoring -a, -r, -y\n");
+		reverse = 0;
+	}
 
 	if (verbose) {
 		printinfo(stderr);
