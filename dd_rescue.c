@@ -192,14 +192,14 @@ void check_seekable(const int id, const int od)
 /* Calc position in graph */
 int gpos(off_t off)
 {
-	static const int glen = 42; //strlen(graph) - 2;
+	static const int glen = 40; //strlen(graph) - 2;
 	return 1+(glen*off/ilen);
 }
 
 /* Prepare graph */
 void preparegraph()
 {
-	graph = ":........................................:";
+	graph = strdup(":........................................:");
 	if (reverse) {
 		graph[gpos(ipos)+1] = '<';
 		graph[gpos(ipos-estxfer)-1] = '>';
