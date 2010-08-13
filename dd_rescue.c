@@ -105,7 +105,7 @@ clock_t startclock;
 const char* up = UP;
 const char* down = DOWN;
 const char* right = RIGHT;
-char *graph = "                                          ";
+char *graph;
 
 inline float difftimetv(const struct timeval* const t2, 
 			const struct timeval* const t1)
@@ -199,7 +199,7 @@ int gpos(off_t off)
 /* Prepare graph */
 void preparegraph()
 {
-	graph = strdup(":........................................:");
+	graph = strdup(":.........................................:");
 	if (reverse) {
 		graph[gpos(ipos)+1] = '<';
 		graph[gpos(ipos-estxfer)-1] = '>';
@@ -248,7 +248,7 @@ void input_length()
 			return;
 		diff = ilen - stbuf.st_blocks*512;
 		if (diff >= 4096 && (float)diff/ilen > 0.05)
-		       fplog(stderr, "dd_rescue: (info) %s is sparse (%i%%), consider -a\n", iname, (int)(100.0*diff/ilen));
+		       fplog(stderr, "dd_rescue: (info) %s is sparse (%i%%) %s\n", iname, (int)(100.0*diff/ilen), (sparse? "": ", consider -a"));
 	}
 	if (!ilen)
 		return;
@@ -267,6 +267,7 @@ void input_length()
 void doprint(FILE* const file, const int bs, const clock_t cl, 
 	     const float t1, const float t2, const int sync)
 {
+	float avgrate = (float)xfer/(t1*1024);
 	fprintf(file, "dd_rescue: (info): ipos:%12.1fk, opos:%12.1fk, xferd:%12.1fk\n",
 		(float)ipos/1024, (float)opos/1024, (float)xfer/1024);
 	fprintf(file, "             %s  %s  errs:%7i, errxfer:%12.1fk, succxfer:%12.1fk\n",
@@ -275,13 +276,24 @@ void doprint(FILE* const file, const int bs, const clock_t cl,
 	if (sync || (file != stdin && file != stdout) )
 		fprintf(file, "             +curr.rate:%9.0fkB/s, avg.rate:%9.0fkB/s, avg.load:%5.1f%%\n",
 			(float)(xfer-lxfer)/(t2*1024),
-			(float)xfer/(t1*1024),
+			avgrate,
 			100.0*(cl-startclock)/(CLOCKS_PER_SEC*t1));
 	else
 		fprintf(file, "             -curr.rate:%s%s%s%s%s%s%s%s%skB/s, avg.rate:%9.0fkB/s, avg.load:%5.1f%%\n",
 			right, right, right, right, right, right, right, right, right,
 			(float)xfer/(t1*1024),
 			100.0*(cl-startclock)/(CLOCKS_PER_SEC*t1));
+	if (estxfer) {
+		int sec = (estxfer-xfer)/(1024*avgrate);
+		int hour = sec / 3600;
+		int min = (sec % 3600) / 60;
+		sec = sec % 60;
+		updgraph(0);
+		fprintf(file, "             %s %3i%%  ETA: %2i:%02i:%02i \n",
+			graph, (int)(100*xfer/estxfer), hour, min, sec);
+	} else
+		fprintf(file, "\n");
+
 }
 
 void printstatus(FILE* const file1, FILE* const file2,
@@ -583,6 +595,7 @@ int copyfile_hardbs(const off_t max)
 				}
 			}
 			savebb(ipos/hardbs);
+			updgraph(1);
 			fxfer += toread; xfer += toread;
 			if (reverse) { 
 				ipos -= toread; opos -= toread; 
