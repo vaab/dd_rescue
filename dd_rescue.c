@@ -105,6 +105,7 @@ clock_t startclock;
 const char* up = UP;
 const char* down = DOWN;
 const char* right = RIGHT;
+char *graph = "                                          ";
 
 inline float difftimetv(const struct timeval* const t2, 
 			const struct timeval* const t1)
@@ -188,6 +189,38 @@ void check_seekable(const int id, const int od)
 	errno = 0;
 }
 
+/* Calc position in graph */
+int gpos(off_t off)
+{
+	static const int glen = 42; //strlen(graph) - 2;
+	return 1+(glen*off/ilen);
+}
+
+/* Prepare graph */
+void preparegraph()
+{
+	graph = ":........................................:";
+	if (reverse) {
+		graph[gpos(ipos)+1] = '<';
+		graph[gpos(ipos-estxfer)-1] = '>';
+
+	} else {
+		graph[gpos(ipos)-1] = '>';
+		graph[gpos(ipos+estxfer)+1] = '<';
+	}
+}
+
+void updgraph(int err)
+{
+	int off = gpos(ipos);
+	if (graph[off] == 'x')
+		return;
+	if (err)
+		graph[off] = 'x';
+	else
+		graph[off] = '-';
+}
+
 /* Tries to determine size of input file */
 void input_length()
 {
@@ -224,6 +257,7 @@ void input_length()
 		estxfer = maxxfer;
 	fplog(stderr, "dd_rescue: (info) expect to copy %likB from %s\n",
 			estxfer/1024, iname);
+	preparegraph();
 }
 
 
