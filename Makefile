@@ -34,7 +34,7 @@ distclean: clean
 	rm -f *~
 
 dist: distclean
-	tar cvzf ../dd_rescue-$(VERSION).tar.gz -C.. --exclude=$(MYDIR)/CV* $(MYDIR)/
+	tar cvzf ../dd_rescue-$(VERSION).tar.gz -C.. --exclude=$(MYDIR)/CV* --exclude $(MYDIR)/dd_rescue2 --exclude $(MYDIR)/.dd* $(MYDIR)
 
 install: $(TARGETS)
 	mkdir -p $(INSTALLDIR)
