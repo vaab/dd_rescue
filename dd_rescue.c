@@ -302,6 +302,7 @@ void printstatus(FILE* const file1, FILE* const file2,
 	float t1, t2; 
 	clock_t cl;
 	static int einvalwarn = 0;
+	static int called = 0;
 
 	if (file1 == stderr || file1 == stdout) 
 		fprintf(file1, "%s%s%s%s", up, up, up, up);
@@ -326,7 +327,7 @@ void printstatus(FILE* const file1, FILE* const file2,
 		doprint(file1, bs, cl, t1, t2, sync);
 	if (file2)
 		doprint(file2, bs, cl, t1, t2, sync);
-	if (!syncfreq || sync) {
+	if (sync || (!syncfreq && !(called++%8))) {
 		memcpy(&lasttime, &currenttime, sizeof(lasttime));
 		lxfer = xfer;
 	}
