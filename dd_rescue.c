@@ -9,8 +9,8 @@
  * This tool is thus suitable for rescueing data of crashed disk,
  * and that's the reason it has been written by me.
  *
- * (c) Kurt Garloff <garloff@suse.de>, 11/97, 10/99, 2003 -- 2010
- * Copyright: GNU GPL v2 or v3.
+ * (c) Kurt Garloff <garloff@suse.de>, 11/97, 10/99
+ * Copyright: GNU GPL
  *
  * Improvements from LAB Valentin, see
  * http://www.tharbad.ath.cx/~vaab/kalysto/Utilities/dd_rhelp/dd_rhelp_en.html
@@ -21,6 +21,7 @@
  * - Use termcap to fetch cursor up/down codes
  * - Better handling of write errors: also try sub blocks
  * - Optional colors
+ * - Estimate total amount of data to copy, display progress and ETA
  * - Optionally use fallocate to preallocate space on the target
  */
 
@@ -283,7 +284,7 @@ void doprint(FILE* const file, const int bs, const clock_t cl,
 			(float)xfer/(t1*1024),
 			100.0*(cl-startclock)/(CLOCKS_PER_SEC*t1));
 	if (estxfer && avgrate > 0) {
-		int sec = (estxfer-xfer)/(1024*avgrate) + 0.5;
+		int sec = (estxfer-xfer)/(1024*avgrate);
 		int hour = sec / 3600;
 		int min = (sec % 3600) / 60;
 		sec = sec % 60;
@@ -301,7 +302,6 @@ void printstatus(FILE* const file1, FILE* const file2,
 	float t1, t2; 
 	clock_t cl;
 	static int einvalwarn = 0;
-	static int called = 0;
 
 	if (file1 == stderr || file1 == stdout) 
 		fprintf(file1, "%s%s%s%s", up, up, up, up);
@@ -326,7 +326,7 @@ void printstatus(FILE* const file1, FILE* const file2,
 		doprint(file1, bs, cl, t1, t2, sync);
 	if (file2)
 		doprint(file2, bs, cl, t1, t2, sync);
-	if (sync || (!syncfreq && !(called++%16))) {
+	if (1 || sync) {
 		memcpy(&lasttime, &currenttime, sizeof(lasttime));
 		lxfer = xfer;
 	}
@@ -982,7 +982,7 @@ int main(int argc, char* argv[])
 
 	/* Set sync frequency */
 	if (syncsz == -1)
-		syncfreq = 0;
+		syncfreq = 512;
 	else if (syncsz == 0)
 		syncfreq = 0;
 	else
@@ -1148,9 +1148,11 @@ int main(int argc, char* argv[])
 		printstatus(stderr, 0, softbs, 0);
 	}
 
+#ifdef HAVE_SPLICE
 	if (dosplice)
 		c = copyfile_splice(maxxfer);
 	else
+#endif
 		c = copyfile_softbs(maxxfer);
 	gettimeofday(&currenttime, NULL);
 	printreport();
