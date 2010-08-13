@@ -85,7 +85,7 @@ int maxerr, nrerr, reverse, dotrunc, abwrerr, sparse, nosparse;
 int verbose, quiet, interact, force;
 void* buf;
 char *lname, *iname, *oname, *bbname = NULL;
-off_t ipos, opos, xfer, lxfer, sxfer, fxfer, maxxfer, init_opos;
+off_t ipos, opos, xfer, lxfer, sxfer, fxfer, maxxfer, init_opos, ilen, estxfer;
 
 int ides, odes, identical, pres;
 int o_dir_in, o_dir_out, dosplice;
@@ -186,6 +186,44 @@ void check_seekable(const int id, const int od)
 	} //else
 	//	lseek(od, (off_t)0, SEEK_SET);
 	errno = 0;
+}
+
+/* Tries to determine size of input file */
+void input_length()
+{
+	struct stat stbuf;
+	if (i_chr)
+		return;
+	if (fstat(ides, &stbuf))
+		return;
+	if (S_ISLNK(stbuf.st_mode))
+		return;
+	if (S_ISBLK(stbuf.st_mode)) {
+		/* Do magic to figure size of block dev */
+		off_t p = lseek(ides, 0, SEEK_CUR);
+		if (p == -1)
+			return;
+		ilen = lseek(ides, 0, SEEK_END) + 1;
+		lseek(ides, p, SEEK_SET);
+	} else {
+		off_t diff;
+		ilen = stbuf.st_size;
+		if (!ilen)
+			return;
+		diff = ilen - stbuf.st_blocks*512;
+		if (diff >= 4096 && (float)diff/ilen > 0.05)
+		       fplog(stderr, "dd_rescue: (info) %s is sparse (%i%%), consider -a\n", iname, (int)(100.0*diff/ilen));
+	}
+	if (!ilen)
+		return;
+	if (!reverse)
+		estxfer = ilen - ipos;
+	else
+		estxfer = ipos;
+	if (maxxfer && estxfer > maxxfer)
+		estxfer = maxxfer;
+	fplog(stderr, "dd_rescue: (info) expect to copy %likB from %s\n",
+			estxfer/1024, iname);
 }
 
 
@@ -1026,6 +1064,7 @@ int main(int argc, char* argv[])
 		cleanup(); exit(19);
 	}
 		
+	input_length();
 
 	if (dosplice) {
 		fplog(stderr, "dd_rescue: splice copy, ignoring -a, -r, -y\n");
