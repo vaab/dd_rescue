@@ -515,7 +515,7 @@ int dowrite(const ssize_t rd)
 	if (!sparse || blockiszero(buf, rd) < rd)
 		errs += ((wr = writeblock(rd)) < rd ? 1: 0);
 	advancepos(rd, wr);
-	if (wr < 0 && (errno == ENOSPC 
+	if (wr <= 0 && (errno == ENOSPC 
 		   || (errno == EFBIG && !reverse))) 
 		return -errs;
 	if (rd != wr && !sparse) {
@@ -582,7 +582,7 @@ int copyfile_hardbs(const off_t max)
 				ssize_t wr = 0;
 				memset(buf+rd, 0, toread-rd);
 				errs += ((wr = writeblock(toread)) < toread ? 1: 0);
-				if (wr < 0 && (errno == ENOSPC 
+				if (wr <= 0 && (errno == ENOSPC 
 					   || (errno == EFBIG && !reverse))) 
 					return errs;
 				if (toread != wr) {
