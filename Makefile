@@ -2,14 +2,14 @@
 # (c) garloff@suse.de, 99/10/09, GNU GPL
 # $Id$
 
-VERSION = 1.18
+VERSION = 1.19
 
 DESTDIR = 
 
 CC = gcc
 RPM_OPT_FLAGS = -O2 -Wall -g
 CFLAGS = $(RPM_OPT_FLAGS) $(EXTRA_CFLAGS)
-DEFINES = -DVERSION=\"$(VERSION)\"
+DEFINES = -DVERSION=\"$(VERSION)\" 
 INSTALL = install
 INSTALLFLAGS = -s
 prefix = $(DESTDIR)/usr
@@ -23,6 +23,9 @@ DOCDIR = $(prefix)/share/doc/packages
 INSTASROOT = -o root -g root
 
 default: $(TARGETS)
+
+falloc: dd_rescue.c
+	$(CC) $(CFLAGS) -DHAVE_FALLOCATE=1 $(DEFINES) $< -o dd_rescue -lfallocate
 
 dd_rescue: dd_rescue.c
 	$(CC) $(CFLAGS) $(DEFINES) $< -o $@

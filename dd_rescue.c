@@ -21,7 +21,6 @@
  * - Use termcap to fetch cursor up/down codes
  * - Better handling of write errors: also try sub blocks
  * - Optional colors
- * - Estimate total amount of data to copy, display progress and ETA
  * - Optionally use fallocate to preallocate space on the target
  */
 
@@ -61,6 +60,10 @@
 #include <fcntl.h>
 #undef splice
 
+#ifdef HAVE_FALLOCATE
+#include <fallocate.h>
+#endif
+
 /* splice */
 #ifdef __linux__
 # define __KERNEL__
@@ -87,7 +90,7 @@ void* buf;
 char *lname, *iname, *oname, *bbname = NULL;
 off_t ipos, opos, xfer, lxfer, sxfer, fxfer, maxxfer, init_opos, ilen, estxfer;
 
-int ides, odes, identical, pres;
+int ides, odes, identical, pres, falloc;
 int o_dir_in, o_dir_out, dosplice;
 char i_chr, o_chr;
 
@@ -262,6 +265,30 @@ void input_length()
 			estxfer/1024, iname);
 	preparegraph();
 }
+
+#ifdef HAVE_FALLOCATE
+void do_fallocate()
+{
+	struct stat stbuf;
+	off_t to_falloc, alloced;
+	if (o_chr)
+		return;
+	if (!estxfer)
+		return;
+	if (fstat(odes, &stbuf))
+		return;
+	if (!S_ISREG(stbuf.st_mode))
+		return;
+	alloced = stbuf.st_blocks*512 - opos;
+	to_falloc = estxfer - (alloced < 0 ? 0 : alloced);
+	if (to_falloc <= 0)
+		return;
+	if (linux_fallocate64(odes, FALLOC_FL_KEEP_SIZE, 
+			      opos, to_falloc))
+	       fplog(stderr, "dd_rescue: (warning): fallocate %s (%li, %li) failed: %s\n",
+			       oname, opos, to_falloc, strerror(errno));
+}
+#endif
 
 
 void doprint(FILE* const file, const int bs, const clock_t cl, 
@@ -829,6 +856,9 @@ void printhelp()
 #ifdef HAVE_SPLICE
 	fprintf(stderr, "         -k         use efficient in-kernel zerocopy splice\n");
 #endif       	
+#ifdef HAVE_FALLOCATE
+	fprintf(stderr, "         -P         use fallocate to preallocate target space\n");
+#endif
 	fprintf(stderr, "         -w         abort on Write errors (def=no),\n");
 	fprintf(stderr, "         -a         spArse file writing (def=no),\n");
 	fprintf(stderr, "         -A         Always write blocks, zeroed if err (def=no),\n");
@@ -887,14 +917,14 @@ int main(int argc, char* argv[])
 	reverse = 0; dotrunc = 0; abwrerr = 0; sparse = 0; nosparse = 0;
 	verbose = 0; quiet = 0; interact = 0; force = 0; pres = 0;
 	lname = 0; iname = 0; oname = 0; o_dir_in = 0; o_dir_out = 0;
-	dosplice = 0;
+	dosplice = 0; falloc = 0;
 
 	/* Initialization */
 	sxfer = 0; fxfer = 0; lxfer = 0; xfer = 0;
 	ides = -1; odes = -1; logfd = 0; nrerr = 0; buf = 0;
 	i_chr = 0; o_chr = 0;
 
-	while ((c = getopt(argc, argv, ":rtfihqvVwaAdDkpb:B:m:e:s:S:l:o:y:")) != -1) {
+	while ((c = getopt(argc, argv, ":rtfihqvVwaAdDkpPb:B:m:e:s:S:l:o:y:")) != -1) {
 		switch (c) {
 			case 'r': reverse = 1; break;
 			case 't': dotrunc = O_TRUNC; break;
@@ -908,6 +938,7 @@ int main(int argc, char* argv[])
 			case 'k': dosplice = 1; break;
 #endif				  
 			case 'p': pres = 1; break;
+			case 'P': falloc = 1; break;
 			case 'a': sparse = 1; nosparse = 0; break;
 			case 'A': nosparse = 1; sparse = 0; break;
 			case 'w': abwrerr = 1; break;
@@ -1119,12 +1150,16 @@ int main(int argc, char* argv[])
 		cleanup(); exit(19);
 	}
 		
-	input_length();
-
 	if (dosplice) {
 		fplog(stderr, "dd_rescue: splice copy, ignoring -a, -r, -y\n");
 		reverse = 0;
 	}
+
+	input_length();
+#ifdef HAVE_FALLOCATE
+	if (falloc)
+		do_fallocate();
+#endif
 
 	if (verbose) {
 		printinfo(stderr);
