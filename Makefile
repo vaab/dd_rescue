@@ -21,6 +21,7 @@ TARGETS = dd_rescue
 OBJECTS = dd_rescue.o
 DOCDIR = $(prefix)/share/doc/packages
 INSTASROOT = -o root -g root
+LIBDIR = /usr/lib
 
 default: $(TARGETS)
 
@@ -28,13 +29,16 @@ libfalloc: dd_rescue.c
 	$(CC) $(CFLAGS) -DHAVE_FALLOCATE=1 -DHAVE_LIBFALLOCATE=1 $(DEFINES) $< -o dd_rescue -lfallocate
 
 libfalloc-static: dd_rescue.c
-	$(CC) $(CFLAGS) -DHAVE_FALLOCATE=1 -DHAVE_LIBFALLOCATE=1 $(DEFINES) $< -o dd_rescue -static -lfallocate
+	$(CC) $(CFLAGS) -DHAVE_FALLOCATE=1 -DHAVE_LIBFALLOCATE=1 $(DEFINES) $< -o dd_rescue $(LIBDIR)/libfallocate.a
 
 falloc: dd_rescue.c
 	$(CC) $(CFLAGS) -DHAVE_FALLOCATE=1 $(DEFINES) $< -o dd_rescue
 
 dd_rescue: dd_rescue.c
 	$(CC) $(CFLAGS) $(DEFINES) $< -o $@
+
+strip: dd_rescue
+	strip -S $<
 
 clean:
 	rm -f $(TARGETS) $(OBJECTS) core
