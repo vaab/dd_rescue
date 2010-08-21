@@ -21,7 +21,7 @@
  * - Use termcap to fetch cursor up/down codes
  * - Better handling of write errors: also try sub blocks
  * - Optional colors
- * - Optionally use fallocate to preallocate space on the target
+ * - Use dlopen to open libfallocate rather than linking to it ...
  */
 
 #ifndef VERSION
