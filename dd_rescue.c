@@ -60,7 +60,7 @@
 #include <fcntl.h>
 #undef splice
 
-#ifdef HAVE_FALLOCATE
+#ifdef HAVE_LIBFALLOCATE
 #include <fallocate.h>
 #endif
 
@@ -283,8 +283,12 @@ void do_fallocate()
 	to_falloc = estxfer - (alloced < 0 ? 0 : alloced);
 	if (to_falloc <= 0)
 		return;
+#ifdef HAVE_LIBFALLOCATE
 	if (linux_fallocate64(odes, FALLOC_FL_KEEP_SIZE, 
 			      opos, to_falloc))
+#else
+	if (fallocate64(odes, 1, opos, to_falloc))
+#endif
 	       fplog(stderr, "dd_rescue: (warning): fallocate %s (%li, %li) failed: %s\n",
 			       oname, opos, to_falloc, strerror(errno));
 }
