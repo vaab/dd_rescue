@@ -261,7 +261,7 @@ void input_length()
 		estxfer = ipos;
 	if (maxxfer && estxfer > maxxfer)
 		estxfer = maxxfer;
-	fplog(stderr, "dd_rescue: (info) expect to copy %likB from %s\n",
+	fplog(stderr, "dd_rescue: (info) expect to copy %LikB from %s\n",
 			estxfer/1024, iname);
 	preparegraph();
 }
@@ -289,7 +289,7 @@ void do_fallocate()
 #else
 	if (fallocate64(odes, 1, opos, to_falloc))
 #endif
-	       fplog(stderr, "dd_rescue: (warning): fallocate %s (%li, %li) failed: %s\n",
+	       fplog(stderr, "dd_rescue: (warning): fallocate %s (%Li, %Li) failed: %s\n",
 			       oname, opos, to_falloc, strerror(errno));
 }
 #endif
@@ -312,7 +312,7 @@ void doprint(FILE* const file, const int bs, const clock_t cl,
 	else
 		fprintf(file, "             -curr.rate:%s%s%s%s%s%s%s%s%skB/s, avg.rate:%9.0fkB/s, avg.load:%5.1f%%\n",
 			right, right, right, right, right, right, right, right, right,
-			(float)xfer/(t1*1024),
+			avgrate,
 			100.0*(cl-startclock)/(CLOCKS_PER_SEC*t1));
 	if (estxfer && avgrate > 0) {
 		int sec = (estxfer-xfer)/(1024*avgrate);
