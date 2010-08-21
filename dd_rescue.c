@@ -378,7 +378,7 @@ void printreport()
 {
 	/* report */
 	FILE *report = (!quiet || nrerr)? stderr: 0;
-	fplog(report, "Summary for %s -> %s:\n", iname, oname);
+	fplog(report, "dd_rescue: (info): Summary for %s -> %s:\n", iname, oname);
 	if (report)
 		fprintf(stderr, "%s%s%s%s", down, down, down, down);
 	printstatus(report, logfd, 0, 1);
@@ -1155,7 +1155,7 @@ int main(int argc, char* argv[])
 	}
 		
 	if (dosplice) {
-		fplog(stderr, "dd_rescue: splice copy, ignoring -a, -r, -y\n");
+		fplog(stderr, "dd_rescue: (info): splice copy, ignoring -a, -r, -y\n");
 		reverse = 0;
 	}
 
