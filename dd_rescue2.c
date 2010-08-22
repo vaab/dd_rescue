@@ -1,4 +1,4 @@
-/* dd_rescue.c */
+/* dd_rescue2.c */
 /* 
  * dd_rescue copies your data from one file to another.
  * Files might as well be block devices, such as hd partitions.
@@ -42,7 +42,8 @@
 #define _LARGEFILE_SOURCE
 #define _FILE_OFFSET_BITS 64
 
-#include <stdio.h>
+#include "dd_rescue2.h"
+
 #include <stdlib.h>
 #include <stdarg.h>
 #include <unistd.h>
@@ -82,22 +83,27 @@ _syscall6(long, splice, int, fdin, loff_t*, off_in, int, fdout, loff_t*, off_out
 # endif
 #endif
 
+/* Internal */
+static off_t init_opos;
+void* dd_r_buf;
 
-int softbs, hardbs, syncfreq;
-int maxerr, nrerr, reverse, dotrunc, abwrerr, sparse, nosparse;
-int verbose, quiet, interact, force;
-void* buf;
-char *lname, *iname, *oname, *bbname = NULL;
-off_t ipos, opos, xfer, lxfer, sxfer, fxfer, maxxfer, init_opos, ilen, estxfer;
+dd_r_status d_status;
 
-int ides, odes, identical, pres, falloc;
-int o_dir_in, o_dir_out, dosplice;
-char i_chr, o_chr;
+/* Usable by plugins */
+dd_r_file d_infile, d_outfile;
+dd_r_ctrl_par d_par;
 
+char *logname, *bbname = NULL;
 FILE *logfd;
-struct timeval starttime, lasttime, currenttime;
-struct timezone tz;
+
+typedef struct struct_dd_r_stamp {
+	off_t st_xfer;
+	struct timeval st_time;
+} dd_r_stamp;
+
 clock_t startclock;
+struct timeval starttime, currenttime;
+struct timezone tz;
 
 #ifndef UP
 # define UP "\x1b[A"
@@ -314,10 +320,10 @@ void doprint(FILE* const file, const int bs, const clock_t cl,
 		(float)ipos/1024, (float)opos/1024, (float)xfer/1024);
 	fprintf(file, "             %s  %s  errs:%7i, errxfer:%12.1fk, succxfer:%12.1fk\n",
 		(reverse? "-": " "), (bs==hardbs? "*": " "), nrerr, 
-		(float)fxfer/1024, (float)sxfer/1024);
+		(float)errxfer/1024, (float)sxfer/1024);
 	if (sync || (file != stdin && file != stdout) )
 		fprintf(file, "             +curr.rate:%9.0fkB/s, avg.rate:%9.0fkB/s, avg.load:%5.1f%%\n",
-			(float)(xfer-lxfer)/(t2*1024),
+			(float)(xfer-lastxfer)/(t2*1024),
 			avgrate,
 			100.0*(cl-startclock)/(CLOCKS_PER_SEC*t1));
 	else
@@ -370,7 +376,7 @@ void printstatus(FILE* const file1, FILE* const file2,
 		doprint(file2, bs, cl, t1, t2, sync);
 	if (1 || sync) {
 		memcpy(&lasttime, &currenttime, sizeof(lasttime));
-		lxfer = xfer;
+		lastxfer = xfer;
 	}
 }
 
@@ -643,7 +649,7 @@ int copyfile_hardbs(const off_t max)
 			}
 			savebb(ipos/hardbs);
 			updgraph(1);
-			fxfer += toread; xfer += toread;
+			errxfer += toread; xfer += toread;
 			if (reverse) { 
 				ipos -= toread; opos -= toread; 
 			} else { 
@@ -935,7 +941,7 @@ int main(int argc, char* argv[])
 	dosplice = 0; falloc = 0;
 
 	/* Initialization */
-	sxfer = 0; fxfer = 0; lxfer = 0; xfer = 0;
+	sxfer = 0; errxfer = 0; lastxfer = 0; xfer = 0;
 	ides = -1; odes = -1; logfd = 0; nrerr = 0; buf = 0;
 	i_chr = 0; o_chr = 0;
 
