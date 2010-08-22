@@ -3,9 +3,11 @@
 #ifndef _DD_RESCUE2_H
 #define _DD_RESCUE2_H 1
 
+//#define _GNU_SOURCE
 #define _LARGEFILE_SOURCE
 #define _FILE_OFFSET_BITS 64
 #include <stdio.h>
+#include <stdlib.h>
 
 typedef struct struct_dd_r_file {
 	char* name;
@@ -32,24 +34,24 @@ typedef struct struct_dd_r_status {
 /* Semantics: prepare and finish are additive, pread and pwrite
  * will be overwritten
  */
-typedef int dd_r_prepare_read(dd_r_file *infile, dd_r_ctrl_par *par);
-typedef int dd_r_pread(void* buf, dd_r_file *infile, dd_r_ctrl_par *par);
-typedef int dd_r_finish_read(dd_r_file *infile, dd_r_ctrl_par *par);
+typedef int (*dd_r_prepare_read)(dd_r_file *infile, dd_r_ctrl_par *par);
+typedef int (*dd_r_pread)(void* buf, dd_r_file *infile, dd_r_ctrl_par *par);
+typedef int (*dd_r_finish_read)(dd_r_file *infile, dd_r_ctrl_par *par);
 
-typedef int dd_r_prepare_write(dd_r_file *outfile, dd_r_ctrl_par *par);
-typedef int dd_r_pwrite(void* buf, dd_r_file *outfile, dd_r_ctrl_par *par);
-typedef int dd_r_finish_write(dd_r_file *outfile, dd_r_ctrl_par *par);
+typedef int (*dd_r_prepare_write)(dd_r_file *outfile, dd_r_ctrl_par *par);
+typedef int (*dd_r_pwrite)(void* buf, dd_r_file *outfile, dd_r_ctrl_par *par);
+typedef int (*dd_r_finish_write)(dd_r_file *outfile, dd_r_ctrl_par *par);
 
 int fplog(FILE* const file, const char * const fmt, ...);
 
 struct dd_r_plugin_ops {
 	dd_r_prepare_read d_prep_r;
 	dd_r_pread d_pread;
-	dd_r_fininsh_read d_fin_r;
+	dd_r_finish_read d_fin_r;
 	dd_r_prepare_write d_prep_w;
 	dd_r_pwrite d_pwrite;
-	dd_r_fininsh_write d_fin_w;
-}
+	dd_r_finish_write d_fin_w;
+};
 
 
 #endif

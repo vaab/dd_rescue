@@ -140,7 +140,7 @@ int fplog(FILE* const file, const char * const fmt, ...)
 	return ret;
 }
 
-int check_identical(const char* const in, const char* const on)
+static int check_identical(const char* const in, const char* const on)
 {
 	int err = 0;
 	struct stat istat, ostat;
@@ -1059,7 +1059,7 @@ int main(int argc, char* argv[])
 
 	memset(buf, 0, softbs);
 
-	identical = check_identical(iname, oname);
+	d_par.identical = check_identical(iname, oname);
 	if (identical && dotrunc && !force) {
 		fplog(stderr, "dd_rescue: (fatal): infile and outfile are identical and trunc turned on!\n");
 		cleanup(); exit(19);
