@@ -134,7 +134,7 @@ int fplog(FILE* const file, const char * const fmt, ...)
 	return ret;
 }
 
-int check_identical(const char* const in, const char* const on)
+static int check_identical(const char* const in, const char* const on)
 {
 	int err = 0;
 	struct stat istat, ostat;
@@ -154,7 +154,7 @@ int check_identical(const char* const in, const char* const on)
 }
 
 
-int openfile(const char* const fname, const int flags)
+static int openfile(const char* const fname, const int flags)
 {
 	int fdes;
 	if (!strcmp(fname, "-")) {
@@ -173,7 +173,7 @@ int openfile(const char* const fname, const int flags)
 }
 
 /* Checks whether files are seekable */
-void check_seekable(const int id, const int od)
+static void check_seekable(const int id, const int od)
 {
 	errno = 0;
 	if (lseek(id, (off_t)0, SEEK_SET) != 0) {
@@ -193,7 +193,7 @@ void check_seekable(const int id, const int od)
 }
 
 /* Calc position in graph */
-int gpos(off_t off)
+inline int gpos(off_t off)
 {
 	static const int glen = 40; //strlen(graph) - 2;
 	return 1+(glen*off/ilen);
@@ -374,7 +374,7 @@ void printstatus(FILE* const file1, FILE* const file2,
 	}
 }
 
-void savebb(int block)
+static void savebb(int block)
 {
 	FILE *bbfile;
 	fplog(stderr, "Bad block reading %s: %d\n", iname, block);
@@ -395,7 +395,7 @@ void printreport()
 	printstatus(report, logfd, 0, 1);
 }
 
-int mayexpandfile()
+static int mayexpandfile()
 {	
 	struct stat st;
 	off_t maxopos = opos;
@@ -451,7 +451,7 @@ int cleanup()
 }
 
 /* is the block zero ? */
-int blockiszero(const char* blk, const int ln)
+static int blockiszero(const char* blk, const int ln)
 {
 	unsigned long* ptr = (unsigned long*)blk;
 	while ((ptr-(unsigned long*)blk) < ln/sizeof(unsigned long))
@@ -542,7 +542,7 @@ void exitfatalerr()
 }
 
 
-void advancepos(const ssize_t rd, const ssize_t wr)
+static void advancepos(const ssize_t rd, const ssize_t wr)
 {
 	sxfer += wr; xfer += rd;
 	if (reverse) { 
@@ -575,7 +575,7 @@ int dowrite(const ssize_t rd)
 	return fatal? -errs: errs;
 }
 
-int partialwrite(const ssize_t rd)
+static int partialwrite(const ssize_t rd)
 {
 	/* But first: write available data and advance (optimization) */
 	if (rd > 0 && !reverse) 
@@ -825,7 +825,7 @@ int copytimes(const char* inm, const char* onm)
 	return err;
 }
 
-off_t readint(const char* const ptr)
+static off_t readint(const char* const ptr)
 {
 	char *es; double res;
 
