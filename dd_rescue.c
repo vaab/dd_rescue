@@ -231,12 +231,23 @@ void updgraph(int err)
 void input_length()
 {
 	struct stat stbuf;
+	estxfer = maxxfer;
+	if (reverse)
+		ilen = ipos;
+	else
+		ilen = ipos + maxxfer;
+	if (estxfer)
+		preparegraph();
 	if (i_chr)
 		return;
 	if (fstat(ides, &stbuf))
 		return;
 	if (S_ISLNK(stbuf.st_mode))
 		return;
+	if (S_ISCHR(stbuf.st_mode)) {
+		i_chr = 1;
+		return;
+	}
 	if (S_ISBLK(stbuf.st_mode)) {
 		/* Do magic to figure size of block dev */
 		off_t p = lseek(ides, 0, SEEK_CUR);
@@ -1160,6 +1171,10 @@ int main(int argc, char* argv[])
 	}
 
 	input_length();
+#if 0
+	fplog(stderr, "dd_rescue: (info): copy %Li bytes from file %s (%Li) to %s\n",
+		estxfer, iname, ilen, oname);
+#endif
 #ifdef HAVE_FALLOCATE
 	if (falloc)
 		do_fallocate();
