@@ -32,7 +32,7 @@ typedef struct struct_dd_r_status {
 
 //extern void* dd_r_buf;
 
-/* Semantics: prepare and finish are additive, pread and pwrite
+/* Semantics: prepare and finish are additive, open, pread and pwrite
  * will be overwritten
  */
 typedef int (*dd_r_open_read)(dd_r_file *infile, dd_r_ctrl_par *par);
