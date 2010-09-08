@@ -27,6 +27,9 @@
 #ifndef VERSION
 # define VERSION "(unknown)"
 #endif
+#ifndef __COMPILER__
+# define "(unknown compiler)"
+#endif
 
 #define ID "$Id$"
 
@@ -900,6 +903,7 @@ void printversion()
 {
 	fprintf(stderr, "\ndd_rescue Version %s, garloff@suse.de, GNU GPL\n", VERSION);
 	fprintf(stderr, " (%s)\n", ID);
+	fprintf(stderr, " (compiled %s %s by %s)\n", __DATE__, __TIME__, __COMPILER__);
 }
 
 void printhelp()
