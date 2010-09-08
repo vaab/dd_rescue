@@ -2,7 +2,7 @@
 # (c) garloff@suse.de, 99/10/09, GNU GPL
 # $Id$
 
-VERSION = 1.21
+VERSION = 1.22
 
 DESTDIR = 
 
@@ -26,7 +26,7 @@ DEFINES = -DVERSION=\"$(VERSION)\"  -D__COMPILER__="\"$(COMPILER)\""
 OUT = -o $@
 
 ifeq ($(CC),wcl386)
-  CFLAGS = "-ox -wx"
+  CFLAGS = "-ox -wx $(EXTRA_CFLAGS)"
   DEFINES = -dMISS_STRSIGNAL -dMISS_PREAD -dVERSION=\"$(VERSION)\" -d__COMPILER__="\"$(COMPILER)\""
   OUT = ""
 endif

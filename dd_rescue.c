@@ -231,6 +231,8 @@ inline int gpos(off_t off)
 /* Prepare graph */
 void preparegraph()
 {
+	if (!ilen)
+		return;
 	graph = strdup(":.........................................:");
 	if (reverse) {
 		graph[gpos(ipos)+1] = '<';

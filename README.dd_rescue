@@ -97,6 +97,36 @@ This limitation has been lifted in version 1.10; though with non-seekable
 in- and our output, you can't recover from errors on that channel.
 
 
+Goodies
+-------
+dd_rescue has a few nifty features:
+* A progress bar (since 1.17) and an estimated time to go.
+* Logging of bad blocks into a log file (-l) or for a file to be 
+  consumed by mke2fs (-b) when creating a file system.
+  Overall, dd_rescue keeps you well informed where it is ...
+* Optional use of fallocate -P to tell the target filesystem how much
+  space it should reserve. (Some filesystems support this to avoid
+  fragmentation -- since 1.19.)
+* File copy without copying data into userspace buffers using splice
+  on Linux) option -k, since 1.15).
+* Optionally, dd_rescue checks whether read blocks are empty and does
+  create sparse output files (option -a, since 1.0x, warns when target
+  is a block device or an existing file since 1.21 -- only ignore this
+  warning if your target device has been initialized with zeros 
+  previously.)
+* Support for direct I/O; this will circumvent kernel buffering and
+  thus will expose medium errors right away. With 
+  dd_rescue -b4k -B4k -d -D -A bdev bdev you will read a bdev and write
+  things back to itself -- if some unreadable blocks are found, those
+  will be filled with zeros -- the defect management of your hardware
+  might result in all of your disk to be usable again afterwards,
+  though you'll have lost a few sectors. (You should still look out
+  for a new disk: When it rains, it pours.)
+* When overwriting a file with itself (but with some offsets, i.e.
+  moving data inside a file), dd_rescue figures out whether it
+  needs to do this backwards (-r) to not end up destroying the data.
+
+
 Copyright
 ---------
 This little program is protected by the GNU General Public License (GPL). 
