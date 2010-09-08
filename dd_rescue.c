@@ -48,13 +48,15 @@
 #include <unistd.h>
 #include <string.h>
 #include <ctype.h>
-#include <getopt.h>
 #include <errno.h>
 #include <signal.h>
 #include <time.h>
 #include <utime.h>
 #include <sys/time.h>
 #include <sys/stat.h>
+#ifdef HAVE_GETOPT_H
+#include <getopt.h>
+#endif
 // hack around buggy splice definition(!)
 #define splice oldsplice
 #include <fcntl.h>
@@ -86,7 +88,7 @@ _syscall6(long, splice, int, fdin, loff_t*, off_in, int, fdout, loff_t*, off_out
 int softbs, hardbs, syncfreq;
 int maxerr, nrerr, reverse, dotrunc, abwrerr, sparse, nosparse;
 int verbose, quiet, interact, force;
-void* buf;
+unsigned char* buf;
 char *lname, *iname, *oname, *bbname = NULL;
 off_t ipos, opos, xfer, lxfer, sxfer, fxfer, maxxfer, init_opos, ilen, estxfer;
 
@@ -232,9 +234,12 @@ void input_length()
 {
 	struct stat stbuf;
 	estxfer = maxxfer;
-	if (reverse)
-		ilen = ipos;
-	else
+	if (reverse) {
+		if (ipos)
+			ilen = ipos;
+		else
+			ilen = maxxfer;
+	} else
 		ilen = ipos + maxxfer;
 	if (estxfer)
 		preparegraph();
@@ -280,6 +285,7 @@ void input_length()
 void sparse_output_warn()
 {
 	struct stat stbuf;
+	off_t eff_opos;
 	if (o_chr)
 		return;
 	if (fstat(odes, &stbuf))
@@ -293,7 +299,7 @@ void sparse_output_warn()
 			fplog(stderr, "dd_rescue: (warning): %s is a block device; -a not recommended; -A recommended\n", oname);
 		return;
 	}
-	off_t eff_opos = opos == -1? ipos: opos;
+	eff_opos = opos == -1? ipos: opos;
 	if (sparse && (eff_opos < stbuf.st_size))
 		fplog(stderr, "dd_rescue: (warning): write into %s (@%li/%li): sparse not recommended\n", 
 				oname, eff_opos, stbuf.st_size);
@@ -473,7 +479,7 @@ int cleanup()
 }
 
 /* is the block zero ? */
-static int blockiszero(const char* blk, const int ln)
+static int blockiszero(const unsigned char* blk, const int ln)
 {
 	unsigned long* ptr = (unsigned long*)blk;
 	while ((ptr-(unsigned long*)blk) < ln/sizeof(unsigned long))
@@ -715,13 +721,14 @@ int copyfile_softbs(const off_t max)
 		/* READ ERROR */
 		if (rd < toread/* && errno*/) {
 			int ret;
+			off_t new_max, old_xfer;
 			++errs;
 			/* Read error occurred: Print warning */
 			printstatus(stderr, logfd, softbs, 1); 
 			/* Some errnos are fatal */
 			exitfatalerr();
 			/* Non fatal error */
-			off_t new_max = xfer + toread;
+			new_max = xfer + toread;
 			/* Error with large blocks: Try small ones ... */
 			if (verbose) 
 				fprintf(stderr, "dd_rescue: (info): problems at ipos %.1fk: %s \n                 fall back to smaller blocksize \n%s%s%s%s",
@@ -731,7 +738,7 @@ int copyfile_softbs(const off_t max)
 				return ret;
 			else
 				errs += ret;
-			off_t old_xfer = xfer;
+			old_xfer = xfer;
 			errs += (err = copyfile_hardbs(new_max));
 			/* EOF */
 			if (!err && old_xfer == xfer)
