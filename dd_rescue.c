@@ -1274,9 +1274,15 @@ int main(int argc, char* argv[])
 #ifdef HAVE_SPLICE
 	if (dosplice)
 		c = copyfile_splice(maxxfer);
-	else
+	else 
 #endif
-		c = copyfile_softbs(maxxfer);
+	{
+		if (softbs > hardbs)
+			c = copyfile_softbs(maxxfer);
+		else
+			c = copyfile_hardbs(maxxfer);
+	}
+
 	gettimeofday(&currenttime, NULL);
 	printreport();
 	cleanup();
