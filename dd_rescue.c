@@ -139,6 +139,18 @@ static ssize_t pwrite(int fd, void *buf, size_t sz, off_t off)
 }
 #endif
 
+#ifdef WINDOWS_NEED_GETTIMEOFDAY
+#include <windows.h>
+static int gettimeofday(struct timeval *TP, struct timezone *tz)
+{
+	SYSTEMTIME st;
+	GetSystemTime(&st);
+	TP->tv_sec = 86400*st.wDay+st.wHour*3600+st.wMinute*60+st.wSecond;
+	TP->tv_usec = 1000*st.wMilliseconds;
+	return 0;
+}
+#endif
+
 inline float difftimetv(const struct timeval* const t2, 
 			const struct timeval* const t1)
 {
@@ -229,7 +241,7 @@ inline int gpos(off_t off)
 }
 
 /* Prepare graph */
-void preparegraph()
+static void preparegraph()
 {
 	if (!ilen)
 		return;
@@ -311,7 +323,7 @@ void input_length()
 	preparegraph();
 }
 
-void sparse_output_warn()
+static void sparse_output_warn()
 {
 	struct stat stbuf;
 	off_t eff_opos;
@@ -335,7 +347,7 @@ void sparse_output_warn()
 }
 
 #ifdef HAVE_FALLOCATE
-void do_fallocate()
+static void do_fallocate()
 {
 	struct stat stbuf;
 	off_t to_falloc, alloced;
@@ -795,7 +807,7 @@ int copyfile_softbs(const off_t max)
 				fprintf(stderr, "dd_rescue: (info): ipos %.1fk promote to large bs again! \n%s%s%s%s",
 					(float)ipos/1024, down, down, down, down);
 		} else {
-	      		int err = dowrite(rd);
+	      		err = dowrite(rd);
 			if (err < 0)
 				return -err;
 			else
@@ -906,6 +918,19 @@ void printversion()
 	fprintf(stderr, "\ndd_rescue Version %s, garloff@suse.de, GNU GPL\n", VERSION);
 	fprintf(stderr, " (%s)\n", ID);
 	fprintf(stderr, " (compiled %s %s by %s)\n", __DATE__, __TIME__, __COMPILER__);
+	fprintf(stderr, " (features: ");
+#ifdef O_DIRECT
+	fprintf(stderr, "O_DIRECT ");
+#endif
+#ifdef HAVE_LIBFALLOCATE
+	fprintf(stderr, "libfallocate ");
+#elif defined(HAVE_FALLOCATE)
+	fprintf(stderr, "fallocate ");
+#endif
+#ifdef HAVE_SPLICE
+	fprintf(stderr, "splice ");
+#endif
+	fprintf(stderr, ")\n");
 }
 
 void printhelp()
@@ -1141,7 +1166,7 @@ int main(int argc, char* argv[])
 		do {
 			fprintf(stderr, "dd_rescue: (question): %s existing %s [y/n] ?", 
 				(dotrunc? "Overwrite": "Write into"), oname);
-			a = toupper(fgetc (stdin)); //fprintf(stderr, "\n");
+			a = toupper(fgetc(stdin)); //fprintf(stderr, "\n");
 		} while (a != 'Y' && a != 'N');
 		if (a == 'N') {
 			fplog(stderr, "dd_rescue: (fatal): exit on user request!\n");
