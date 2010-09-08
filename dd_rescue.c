@@ -139,18 +139,6 @@ static ssize_t pwrite(int fd, void *buf, size_t sz, off_t off)
 }
 #endif
 
-#ifdef WINDOWS_NEED_GETTIMEOFDAY
-#include <windows.h>
-static int gettimeofday(struct timeval *TP, struct timezone *tz)
-{
-	SYSTEMTIME st;
-	GetSystemTime(&st);
-	TP->tv_sec = 86400*st.wDay+st.wHour*3600+st.wMinute*60+st.wSecond;
-	TP->tv_usec = 1000*st.wMilliseconds;
-	return 0;
-}
-#endif
-
 inline float difftimetv(const struct timeval* const t2, 
 			const struct timeval* const t1)
 {
