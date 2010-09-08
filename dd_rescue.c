@@ -112,6 +112,30 @@ const char* down = DOWN;
 const char* right = RIGHT;
 char *graph;
 
+#ifdef MISS_STRSIGNAL
+static char sbuf[16];
+static char* strsignal(int sig)
+{
+	sprintf(sbuf, "sig %i", sig);
+	return sbuf;
+}
+#endif
+#ifdef MISS_PREAD
+static ssize_t pread(int fd, void *buf, size_t sz, off_t off)
+{
+	if (lseek(fd, off, SEEK_SET))
+		return -1;
+	return read(fd, buf, sz);
+}
+
+static ssize_t pwrite(int fd, void *buf, size_t sz, off_t off)
+{
+	if (lseek(fd, off, SEEK_SET))
+		return -1;
+	return write(fd, buf, sz);
+}
+#endif
+
 inline float difftimetv(const struct timeval* const t2, 
 			const struct timeval* const t1)
 {
@@ -953,7 +977,9 @@ int main(int argc, char* argv[])
 {
 	int c;
 	off_t syncsz = -1;
+#ifdef O_DIRECT
 	void **mp = (void **) &buf;
+#endif
 
   	/* defaults */
 	softbs = SOFTBLOCKSIZE; hardbs = HARDBLOCKSIZE;
@@ -1127,12 +1153,6 @@ int main(int argc, char* argv[])
 		copyperm(ides, odes);
 			
 	check_seekable(ides, odes);
-
-	if (0 && i_chr && o_chr) {
-		fprintf(stderr, "dd_rescue: (fatal): Sorry, there is no support yet for non-seekable\n");
-		fprintf(stderr, "                    input and output. This will hopefully change soon ... \n");
-		exit(19);
-	}
 
 	sparse_output_warn();
 	if (o_chr) {
