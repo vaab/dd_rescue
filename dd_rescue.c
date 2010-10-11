@@ -295,7 +295,7 @@ void input_length()
 		if (!ilen)
 			return;
 		diff = ilen - stbuf.st_blocks*512;
-		if (diff >= 4096 && (float)diff/ilen > 0.05)
+		if (diff >= 4096 && (float)diff/ilen > 0.05 && !quiet)
 		       fplog(stderr, "dd_rescue: (info) %s is sparse (%i%%) %s\n", iname, (int)(100.0*diff/ilen), (sparse? "": ", consider -a"));
 	}
 	if (!ilen)
@@ -306,7 +306,8 @@ void input_length()
 		estxfer = ipos;
 	if (maxxfer && estxfer > maxxfer)
 		estxfer = maxxfer;
-	fplog(stderr, "dd_rescue: (info) expect to copy %LikB from %s\n",
+	if (!quiet)
+		fplog(stderr, "dd_rescue: (info) expect to copy %LikB from %s\n",
 			estxfer/1024, iname);
 	preparegraph();
 }
@@ -409,7 +410,7 @@ void printstatus(FILE* const file1, FILE* const file2,
 
 	if (sync) {
 		int err = fsync(odes);
-		if (err && (errno != EINVAL || !einvalwarn)) {
+		if (err && (errno != EINVAL || !einvalwarn) &&!o_chr) {
 			fplog(stderr, "dd_rescue: (warning): sync %s (%.1fk): %s!  \n",
 			      oname, (float)ipos/1024, strerror(errno));
 			++einvalwarn;
@@ -446,10 +447,11 @@ void printreport()
 {
 	/* report */
 	FILE *report = (!quiet || nrerr)? stderr: 0;
-	fplog(report, "dd_rescue: (info): Summary for %s -> %s:\n", iname, oname);
-	if (report)
+	if (report) {
+		fplog(report, "dd_rescue: (info): Summary for %s -> %s:\n", iname, oname);
 		fprintf(stderr, "%s%s%s%s", down, down, down, down);
-	printstatus(report, logfd, 0, 1);
+		printstatus(report, logfd, 0, 1);
+	}
 }
 
 static int mayexpandfile()
@@ -472,10 +474,11 @@ int cleanup()
 	int rc, errs = 0;
 	if (odes != -1) {
 		/* Make sure, the output file is expanded to the last (first) position
-	 	 * FIXME: 0 byte writes do NOT expand file */
+	 	 * FIXME: 0 byte writes do NOT expand file -- mayexpandfile() will
+		 * take care of that. */
 		pwrite(odes, buf, 0, opos);
 		rc = fsync(odes);
-		if (rc) {
+		if (rc && !o_chr) {
 			fplog(stderr, "dd_rescue: (warning): fsync %s (%.1fk): %s!\n", 
 			      oname, (float)opos/1024, strerror(errno));
 			++errs;
@@ -655,16 +658,18 @@ int copyfile_hardbs(const off_t max)
 
 		/* EOF */
 		if (rd == 0 && !errno) {
-			if (!errs)
+			if (!quiet)
 				fplog(stderr, "dd_rescue: (info): read %s (%.1fk): EOF\n", 
 				      iname, (float)ipos/1024);
 			return errs;
 		}
 		/* READ ERROR */
 		if (rd < toread/* && errno*/) {
-			++errs;
-			/* Read error occurred: Print warning */
-			printstatus(stderr, logfd, hardbs, 1); 
+			if (errno) {
+				++errs;
+				/* Read error occurred: Print warning */
+				printstatus(stderr, logfd, hardbs, 1);
+			}
 			/* Some errnos are fatal */
 			exitfatalerr();
 			/* Non fatal error */
@@ -742,26 +747,30 @@ int copyfile_softbs(const off_t max)
 
 		/* EOF */
 		if (rd == 0 && !errno) {
-			if (!errs)
+			if (!quiet)
 				fplog(stderr, "dd_rescue: (info): read %s (%.1fk): EOF\n", 
 				      iname, (float)ipos/1024);
 			return errs;
 		}
-		/* READ ERROR */
+		/* READ ERROR or short read */
 		if (rd < toread/* && errno*/) {
 			int ret;
 			off_t new_max, old_xfer;
-			++errs;
-			/* Read error occurred: Print warning */
-			printstatus(stderr, logfd, softbs, 1); 
+			if (errno) {
+				++errs;
+				/* Read error occurred: Print warning */
+				printstatus(stderr, logfd, softbs, 1);
+			}
 			/* Some errnos are fatal */
 			exitfatalerr();
 			/* Non fatal error */
 			new_max = xfer + toread;
 			/* Error with large blocks: Try small ones ... */
-			if (verbose) 
+			if (verbose) {
 				fprintf(stderr, "dd_rescue: (info): problems at ipos %.1fk: %s \n                 fall back to smaller blocksize \n%s%s%s%s",
 				        (float)ipos/1024, strerror(errno), down, down, down, down);
+				printstatus(stderr, logfd, hardbs, 1);
+			}
 			/* But first: write available data and advance (optimization) */
 			if ((ret = partialwrite(rd)) < 0)
 				return ret;
@@ -822,13 +831,15 @@ int copyfile_splice(const off_t max)
 					SPLICE_F_MOVE | SPLICE_F_MORE);
 		if (rd < 0) {
 			close(fd_pipe[0]); close(fd_pipe[1]);
-			fplog(stderr, "dd_rescue: (info): %s (%.1fk): fall back to userspace copy\n%s%s%s%s", 
-			      iname, (float)ipos/1024, down, down, down, down);
+			if (!quiet)
+				fplog(stderr, "dd_rescue: (info): %s (%.1fk): fall back to userspace copy\n%s%s%s%s", 
+				      iname, (float)ipos/1024, down, down, down, down);
 			return copyfile_softbs(max);
 		}
 		if (rd == 0) {
-			fplog(stderr, "dd_rescue: (info): read %s (%.1fk): EOF (splice)\n", 
-			      iname, (float)ipos/1024);
+			if (!quiet)
+				fplog(stderr, "dd_rescue: (info): read %s (%.1fk): EOF (splice)\n", 
+				      iname, (float)ipos/1024);
 			close(fd_pipe[0]); close(fd_pipe[1]);
 			return 0;
 		}
@@ -1101,9 +1112,10 @@ int main(int argc, char* argv[])
 	}
 
 	/* Set sync frequency */
+	/*
 	if (syncsz == -1)
 		syncfreq = 512;
-	else if (syncsz == 0)
+	else */ if (syncsz <= 0)
 		syncfreq = 0;
 	else
 		syncfreq = (syncsz + softbs - 1) / softbs;
@@ -1235,7 +1247,8 @@ int main(int argc, char* argv[])
 	}
 		
 	if (dosplice) {
-		fplog(stderr, "dd_rescue: (info): splice copy, ignoring -a, -r, -y\n");
+		if (!quiet)
+			fplog(stderr, "dd_rescue: (info): splice copy, ignoring -a, -r, -y\n");
 		reverse = 0;
 	}
 
