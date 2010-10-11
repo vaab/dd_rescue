@@ -415,6 +415,7 @@ void printstatus(FILE* const file1, FILE* const file2,
 			      oname, (float)ipos/1024, strerror(errno));
 			++einvalwarn;
 		}
+		errno = 0;
 	}
 
 	gettimeofday(&currenttime, NULL);
@@ -482,6 +483,7 @@ int cleanup()
 			fplog(stderr, "dd_rescue: (warning): fsync %s (%.1fk): %s!\n", 
 			      oname, (float)opos/1024, strerror(errno));
 			++errs;
+			errno = 0;
 		}
 		rc = close(odes); 
 		if (rc) {
