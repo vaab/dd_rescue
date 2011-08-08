@@ -75,6 +75,10 @@
 # include <asm/unistd.h>
 # ifdef __NR_splice
 #  define HAVE_SPLICE 1
+#  ifndef SPLICE_F_MOVE	/* from fcntl.h on x86-64 linux */
+#   define SPLICE_F_MOVE 1
+#   define SPLICE_F_MORE 4
+#  endif
 #  if 1
 static inline long splice(int fdin, loff_t *off_in, int fdout, 
 			      loff_t *off_out, size_t len, unsigned int flags)
@@ -1140,6 +1144,10 @@ int main(int argc, char* argv[])
 #endif
 
 	memset(buf, 0, softbs);
+
+	/* Special case '.': same as iname (w/o path) */
+	if (!strcmp(oname, "."))
+		oname = basename(iname);
 
 	identical = check_identical(iname, oname);
 	if (identical && dotrunc && !force) {
