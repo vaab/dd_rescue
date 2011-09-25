@@ -1161,6 +1161,8 @@ int main(int argc, char* argv[])
 		cleanup(); exit(22);
 	}
 
+	if (!strcmp(oname, "."))
+		oname = basename(iname);
 	/* Overwrite? */
 	/* Special case '-': stdout */
 	if (strcmp(oname, "-"))
