@@ -518,6 +518,10 @@ int cleanup()
 		fclose(logfd);
 	if (buf)
 		free(buf);
+	if (graph)
+		free(graph);
+	if (oname)
+		free(oname);
 	return errs;
 }
 
@@ -1338,7 +1342,6 @@ int main(int argc, char* argv[])
 	cleanup();
 	if (pres)
 		copytimes(iname, oname);
-	free(oname);
 	return c;
 }
 
