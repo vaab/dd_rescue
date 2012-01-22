@@ -2,12 +2,12 @@
 # (c) garloff@suse.de, 99/10/09, GNU GPL
 # $Id$
 
-VERSION = 1.24
+VERSION = 1.25
 
 DESTDIR = 
 
 CC = gcc
-RPM_OPT_FLAGS = -O2 -Wall -g
+RPM_OPT_FLAGS = -Os -Wall -g
 CFLAGS = $(RPM_OPT_FLAGS) $(EXTRA_CFLAGS)
 INSTALL = install
 INSTALLFLAGS = -s
