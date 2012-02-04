@@ -1,16 +1,29 @@
 /* dd_rescue.c */
 /* 
- * dd_rescue copies your data from one file to another.
- * Files might as well be block devices, such as hd partitions.
- * Unlike dd, it does not necessarily abort on errors but
- * continues to copy the disk, possibly leaving holes behind.
- * Also, it does NOT truncate the output file, so you can copy 
- * more and more pieces of your data, as time goes by.
- * This tool is thus suitable for rescueing data of crashed disk,
- * and that's the reason it has been written by me.
+ * dd_rescue copies your data from one file to another.  Files might as well be
+ * block devices, such as hd partitions.  Unlike dd, it does not necessarily
+ * abort on errors but continues to copy the disk, possibly leaving holes
+ * behind.  Also, it does NOT truncate the output file, so you can copy more
+ * and more pieces of your data, as time goes by.  This tool is thus suitable
+ * for rescueing data of crashed disk, and that's the reason it has been
+ * written by me.
  *
- * (c) Kurt Garloff <garloff@suse.de>, 11/97, 10/99
- * Copyright: GNU GPL
+ * Copyright (C) Kurt Garloff <kurt@garloff.de>, 11/1997 -- 01/2012
+ * License: GNU GPL v2 or v3
+ *
+ *  This program is free software; you can redistribute it and/or modify it
+ *  under the terms of the GNU General Public License as published by the Free
+ *  Software Foundation; either version 2 of the License, or (at your option)
+ *  version 3.
+ *
+ *  This program is distributed in the hope that it will be useful, but WITHOUT
+ *  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ *  FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+ *  more details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program; if not, write to the Free Software Foundation, Inc., 59 Temple
+ * Place, Suite 330, Boston, MA  02111-1307  USA
  *
  * Improvements from LAB Valentin, see
  * http://www.tharbad.ath.cx/~vaab/kalysto/Utilities/dd_rhelp/dd_rhelp_en.html
