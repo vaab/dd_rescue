@@ -1291,6 +1291,12 @@ int main(int argc, char* argv[])
 	if (opos == (off_t)-1) 
 		opos = ipos;
 
+	if (ipos < 0 || opos < 0) {
+		fplog(stderr, "dd_rescue: (fatal): negative position requested (%.1fk)\n", (float)ipos/1024);
+		cleanup(); exit(25);
+	}
+
+
 	if (identical) {
 		fplog(stderr, "dd_rescue: (warning): infile and outfile are identical!\n");
 		if (opos > ipos && !reverse && !force) {
