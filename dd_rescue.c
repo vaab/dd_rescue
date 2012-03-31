@@ -254,7 +254,7 @@ inline int gpos(off_t off)
 /* Prepare graph */
 static void preparegraph()
 {
-	if (!ilen)
+	if (!ilen || ipos > ilen)
 		return;
 	graph = strdup(":.........................................:");
 	if (reverse) {
@@ -329,6 +329,8 @@ void input_length()
 		estxfer = ipos;
 	if (maxxfer && estxfer > maxxfer)
 		estxfer = maxxfer;
+	if (estxfer < 0)
+		estxfer = 0;
 	if (!quiet)
 		fplog(stderr, "dd_rescue: (info) expect to copy %LikB from %s\n",
 			estxfer/1024, iname);
