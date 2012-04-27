@@ -164,7 +164,7 @@ inline float difftimetv(const struct timeval* const t2,
 		(float) (t2->tv_usec - t1->tv_usec) * 1e-6;
 }
 
-/* Write to file and simultaneously log to logfdile, if exsiting */
+/* Write to file and simultaneously log to logfdile, if existing */
 int fplog(FILE* const file, const char * const fmt, ...)
 {
 	int ret = 0;
