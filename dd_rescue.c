@@ -36,6 +36,8 @@
  * - Optional colors
  * - Use dlopen to open libfallocate rather than linking to it ...
  * - Display more infos on errors by collecting info from syslog
+ * - Option to use frandom as virtual input device (Thomas)
+ * - Option to avoid overwriting identical output to be nice to SSD (Thomas)
  */
 
 #ifndef VERSION
