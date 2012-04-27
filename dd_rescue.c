@@ -712,14 +712,7 @@ int copyfile_hardbs(const off_t max)
 			nrerr++; 
 			fplog(stderr, "dd_rescue: (warning): read %s (%.1fk): %s!\n", 
 			      iname, (float)ipos/1024, strerror(eno));
-			/* exit if too many errs */
-			if (maxerr && nrerr >= maxerr) {
-				fplog(stderr, "dd_rescue: (fatal): maxerr reached!\n");
-				printreport();
-				cleanup(); exit(32);
-			}
-			fprintf(stderr, "%s%s%s%s", down, down, down, down);
-			
+		
 			errno = 0;
 			if (nosparse || 
 			    (rd > 0 && (!sparse || blockiszero(buf, rd) < rd))) {
@@ -747,6 +740,13 @@ int copyfile_hardbs(const off_t max)
 			} else { 
 				ipos += toread; opos += toread; 
 			}
+			/* exit if too many errs */
+			if (maxerr && nrerr >= maxerr) {
+				fplog(stderr, "dd_rescue: (fatal): maxerr reached!\n");
+				printreport();
+				cleanup(); exit(32);
+			}
+			fprintf(stderr, "%s%s%s%s", down, down, down, down);
 		} else {
 	      		int err = dowrite(rd);
 			if (err < 0)
