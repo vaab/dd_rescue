@@ -270,7 +270,7 @@ static void preparegraph()
 void updgraph(int err)
 {
 	int off;
-	if (!ilen)
+	if (!ilen || ipos > ilen)
 		return;
 	off = gpos(ipos);
 	if (graph[off] == 'x')
