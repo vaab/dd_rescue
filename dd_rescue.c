@@ -461,10 +461,8 @@ void printstatus(FILE* const file1, FILE* const file2,
 static void savebb(unsigned long block)
 {
 	FILE *bbfile;
-	fplog(stderr, "%s%s%s%sBad block reading %s: %lu %s%s%s%s\n", 
-			up, up, up, up,
-			iname, block,
-			down, down, down, down);
+	fplog(stderr, "Bad block reading %s: %lu \n", 
+			iname, block);
 	if (bbname == NULL)
 		return;
 	bbfile = fopen(bbname, "a");
