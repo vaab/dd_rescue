@@ -1048,7 +1048,7 @@ int main(int argc, char* argv[])
 	int c;
 	off_t syncsz = -1;
 #ifdef O_DIRECT
-	void **mp = (void **) &buf;
+	void *mp;
 #endif
 
   	/* defaults */
@@ -1165,10 +1165,11 @@ int main(int argc, char* argv[])
 		ipos = 0;
 
 #ifdef O_DIRECT
-	if (posix_memalign(mp, sysconf(_SC_PAGESIZE), softbs)) {
+	if (posix_memalign(&mp, sysconf(_SC_PAGESIZE), softbs)) {
 		fplog(stderr, "dd_rescue: (fatal): allocation of aligned buffer failed!\n");
 		cleanup(); exit(18);
 	}
+	buf = mp;
 #else
 	buf = malloc(softbs);
 	if (!buf) {
