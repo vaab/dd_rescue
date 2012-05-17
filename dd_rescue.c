@@ -31,6 +31,7 @@
 
 /*
  * TODO:
+ * - Change default block sizes as suggested bz Jan Kara ...
  * - Use termcap to fetch cursor up/down codes
  * - Better handling of write errors: also try sub blocks
  * - Optional colors
