@@ -50,7 +50,9 @@ Why?
   result in superior performance, but in case of errors, you want to try
   to salvage every single sector. So hardbs is best be set to the hardware
   sector size (most often 512 bytes) and softbs to a large value, such as
-  the default 64k.
+  the default 64k or even larger. (When doing buffered reads on Linux, you
+  might as well set the hardbs to 4k resp. page size, as the kernel will
+  read that much at a time anyway.)
 
 
 Does it actually work?
@@ -72,7 +74,8 @@ You can overwrite a disk or a partition with its own data -- the drive's
 reallocation procedure might result in the whole disk to be readable again
 afterwards (yet the replaced sectors will be filled with 0). If you want
 to use dd_rescue for this purpose, please use O_DIRECT and a block size of 
-4096.
+4096. (Late 2.6 and 3.x kernels allow a block size of 512b as well, so you
+might be able to recover a few sectors more.)
 
 dd_rhelp from LAB Valentin does automate some of this, so you might want to
 give that a try.
