@@ -1129,8 +1129,8 @@ int main(int argc, char* argv[])
 
 	/* sanity checks */
 #ifdef O_DIRECT
-	if ((o_dir_in || o_dir_out) && hardbs < sysconf(_SC_PAGESIZE)) {
-		hardbs = sysconf(_SC_PAGESIZE);
+	if ((o_dir_in || o_dir_out) && hardbs < 512) {
+		hardbs = 512;
 		fplog(stderr, "dd_rescue: (warning): O_DIRECT requires hardbs of at least %i!\n",
 		      hardbs);
 	}
