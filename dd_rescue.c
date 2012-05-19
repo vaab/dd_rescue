@@ -1,5 +1,5 @@
-/* dd_rescue.c */
-/* 
+/** dd_rescue.c
+ * 
  * dd_rescue copies your data from one file to another.  Files might as well be
  * block devices, such as hd partitions.  Unlike dd, it does not necessarily
  * abort on errors but continues to copy the disk, possibly leaving holes
@@ -8,9 +8,12 @@
  * for rescueing data of crashed disk, and that's the reason it has been
  * written by me.
  *
- * Copyright (C) Kurt Garloff <kurt@garloff.de>, 11/1997 -- 01/2012
- * License: GNU GPL v2 or v3
+ * Copyright (C) Kurt Garloff <kurt@garloff.de>, 11/1997 -- 05/2012
  *
+ * Improvements from LAB Valentin, see
+ * http://www.kalysto.org/utilities/dd_rhelp/index.en.html
+ * 
+ * License: GNU GPL v2 or v3
  *  This program is free software; you can redistribute it and/or modify it
  *  under the terms of the GNU General Public License as published by the Free
  *  Software Foundation; either version 2 of the License, or (at your option)
@@ -25,13 +28,10 @@
  * this program; if not, write to the Free Software Foundation, Inc., 59 Temple
  * Place, Suite 330, Boston, MA  02111-1307  USA
  *
- * Improvements from LAB Valentin, see
- * http://www.tharbad.ath.cx/~vaab/kalysto/Utilities/dd_rhelp/dd_rhelp_en.html
- */
+*/
 
-/*
+/**
  * TODO:
- * - Change default block sizes as suggested bz Jan Kara ...
  * - Provide options to copy ACLs/xattrs as well
  * - Use termcap to fetch cursor up/down codes
  * - Better handling of write errors: also try sub blocks
@@ -51,13 +51,22 @@
 
 #define ID "$Id$"
 
-#ifndef SOFTBLOCKSIZE
-# define SOFTBLOCKSIZE 65536
+#ifndef BUF_SOFTBLOCKSIZE
+# define BUF_SOFTBLOCKSIZE 65536
 #endif
 
-#ifndef HARDBLOCKSIZE
-# define HARDBLOCKSIZE 512
+#ifndef BUF_HARDBLOCKSIZE
+# define BUF_HARDBLOCKSIZE pagesize
 #endif
+
+#ifndef DIO_SOFTBLOCKSIZE
+# define DIO_SOFTBLOCKSIZE 1048576
+#endif
+
+#ifndef DIO_HARDBLOCKSIZE
+# define DIO_HARDBLOCKSIZE 512
+#endif
+
 
 #define _GNU_SOURCE
 #define _LARGEFILE_SOURCE
@@ -126,6 +135,8 @@ struct timeval starttime, lasttime, currenttime;
 struct timezone tz;
 clock_t startclock;
 
+unsigned int pagesize = 4096;
+
 #ifndef UP
 # define UP "\x1b[A"
 # define DOWN "\n"
@@ -168,7 +179,7 @@ inline float difftimetv(const struct timeval* const t2,
 		(float) (t2->tv_usec - t1->tv_usec) * 1e-6;
 }
 
-/* Write to file and simultaneously log to logfdile, if existing */
+/** Write to file and simultaneously log to logfdile, if existing */
 int fplog(FILE* const file, const char * const fmt, ...)
 {
 	int ret = 0;
@@ -228,7 +239,7 @@ static int openfile(const char* const fname, const int flags)
 	return fdes;
 }
 
-/* Checks whether files are seekable */
+/** Checks whether files are seekable */
 static void check_seekable(const int id, const int od)
 {
 	errno = 0;
@@ -248,14 +259,14 @@ static void check_seekable(const int id, const int od)
 	errno = 0;
 }
 
-/* Calc position in graph */
+/** Calc position in graph */
 inline int gpos(off_t off)
 {
 	static const int glen = 40; //strlen(graph) - 2;
 	return 1+(glen*off/ilen);
 }
 
-/* Prepare graph */
+/** Prepare graph */
 static void preparegraph()
 {
 	if (!ilen || ipos > ilen)
@@ -285,7 +296,7 @@ void updgraph(int err)
 		graph[off] = '-';
 }
 
-/* Tries to determine size of input file */
+/** Tries to determine size of input file */
 void input_length()
 {
 	struct stat stbuf;
@@ -485,6 +496,37 @@ void printreport()
 	}
 }
 
+int copyperm(int ifd, int ofd)
+{
+	int err; 
+	mode_t fmode;
+	struct stat stbuf;
+	err = fstat(ifd, &stbuf);
+	if (err)
+		return err;
+	fmode = stbuf.st_mode & (S_IRWXU | S_IRWXG | S_IRWXO | S_ISUID | S_ISGID | S_ISVTX);
+	err = fchown(ofd, stbuf.st_uid, stbuf.st_gid);
+	if (err)
+		fmode &= ~(S_ISUID | S_ISGID);
+	err += fchmod(ofd, fmode);
+	return err;
+}
+
+/** File time copy */
+int copytimes(const char* inm, const char* onm)
+{
+	int err;
+	struct stat stbuf;
+	struct utimbuf utbuf;
+	err = stat(inm, &stbuf);
+	if (err)
+		return err;
+	utbuf.actime  = stbuf.st_atime;
+	utbuf.modtime = stbuf.st_mtime;
+	err = utime(onm, &utbuf);
+	return err;
+}
+
 static int mayexpandfile()
 {	
 	struct stat st;
@@ -541,12 +583,14 @@ int cleanup()
 		free(buf);
 	if (graph)
 		free(graph);
+	if (pres)
+		copytimes(iname, oname);
 	if (oname)
 		free(oname);
 	return errs;
 }
 
-/* is the block zero ? */
+/** is the block zero ? */
 static int blockiszero(const unsigned char* blk, const int ln)
 {
 	unsigned long* ptr = (unsigned long*)blk;
@@ -905,37 +949,6 @@ int copyfile_splice(const off_t max)
 }
 #endif
 
-int copyperm(int ifd, int ofd)
-{
-	int err; 
-	mode_t fmode;
-	struct stat stbuf;
-	err = fstat(ifd, &stbuf);
-	if (err)
-		return err;
-	fmode = stbuf.st_mode & (S_IRWXU | S_IRWXG | S_IRWXO | S_ISUID | S_ISGID | S_ISVTX);
-	err = fchown(ofd, stbuf.st_uid, stbuf.st_gid);
-	if (err)
-		fmode &= ~(S_ISUID | S_ISGID);
-	err += fchmod(ofd, fmode);
-	return err;
-}
-
-/*  File time copy */
-int copytimes(const char* inm, const char* onm)
-{
-	int err;
-	struct stat stbuf;
-	struct utimbuf utbuf;
-	err = stat(inm, &stbuf);
-	if (err)
-		return err;
-	utbuf.actime  = stbuf.st_atime;
-	utbuf.modtime = stbuf.st_mtime;
-	err = utime(onm, &utbuf);
-	return err;
-}
-
 static off_t readint(const char* const ptr)
 {
 	char *es; double res;
@@ -981,8 +994,8 @@ void printhelp()
 	fprintf(stderr, "USAGE: dd_rescue [options] infile outfile\n");
 	fprintf(stderr, "Options: -s ipos    start position in  input file (default=0),\n");
 	fprintf(stderr, "         -S opos    start position in output file (def=ipos),\n");
-	fprintf(stderr, "         -b softbs  block size for copy operation (def=%i),\n", SOFTBLOCKSIZE );
-	fprintf(stderr, "         -B hardbs  fallback block size in case of errs (def=%i),\n", HARDBLOCKSIZE );
+	fprintf(stderr, "         -b softbs  block size for copy operation (def=%i, %i for -d),\n", BUF_SOFTBLOCKSIZE, DIO_SOFTBLOCKSIZE);
+	fprintf(stderr, "         -B hardbs  fallback block size in case of errs (def=%i, %i for -d),\n", BUF_HARDBLOCKSIZE, DIO_HARDBLOCKSIZE);
 	fprintf(stderr, "         -e maxerr  exit after maxerr errors (def=0=infinite),\n");
 	fprintf(stderr, "         -m maxxfer maximum amount of data to be transfered (def=0=inf),\n");
 	fprintf(stderr, "         -y syncfrq frequency of fsync calls on outfile (def=512*softbs),\n");
@@ -1009,7 +1022,7 @@ void printhelp()
 	fprintf(stderr, "         -v         verbose operation,\n");
 	fprintf(stderr, "         -V         display version and exit,\n");
 	fprintf(stderr, "         -h         display this help and exit.\n");
-	fprintf(stderr, "Note: Sizes may be given in units b(=512), k(=1024), M(=1024^2) or G(1024^3) bytes\n");
+	fprintf(stderr, "Sizes may be given in units b(=512), k(=1024), M(=1024^2) or G(1024^3) bytes\n");
 	fprintf(stderr, "This program is useful to rescue data in case of I/O errors, because\n");
 	fprintf(stderr, " it does not necessarily abort or truncate the output.\n");
 }
@@ -1054,7 +1067,7 @@ int main(int argc, char* argv[])
 #endif
 
   	/* defaults */
-	softbs = SOFTBLOCKSIZE; hardbs = HARDBLOCKSIZE;
+	softbs = 0; hardbs = 0; /* marker for defaults */
 	maxerr = 0; ipos = (off_t)-1; opos = (off_t)-1; maxxfer = 0; 
 	reverse = 0; dotrunc = 0; abwrerr = 0; sparse = 0; nosparse = 0;
 	verbose = 0; quiet = 0; interact = 0; force = 0; pres = 0;
@@ -1065,6 +1078,10 @@ int main(int argc, char* argv[])
 	sxfer = 0; fxfer = 0; lxfer = 0; xfer = 0;
 	ides = -1; odes = -1; logfd = 0; nrerr = 0; buf = 0;
 	i_chr = 0; o_chr = 0;
+
+#ifdef _SC_PAGESIZE
+	pagesize = sysconf(_SC_PAGESIZE);
+#endif
 
 	while ((c = getopt(argc, argv, ":rtfihqvVwaAdDkpPb:B:m:e:s:S:l:o:y:")) != -1) {
 		switch (c) {
@@ -1129,6 +1146,21 @@ int main(int argc, char* argv[])
 		logfd = fdopen(c, "a");
 	}
 
+	/* Defaults for blocksizes */
+	if (softbs == 0) {
+		if (o_dir_in)
+			softbs = DIO_SOFTBLOCKSIZE;
+		else
+			softbs = BUF_SOFTBLOCKSIZE;
+	}
+	if (hardbs == 0) {
+		if (o_dir_in)
+			hardbs = DIO_HARDBLOCKSIZE;
+		else
+			hardbs = BUF_HARDBLOCKSIZE;
+	}
+	fplog(stderr, "dd_rescue: (info): Using softbs=%lu, hardbs=%lu\n", softbs, hardbs);
+
 	/* sanity checks */
 #ifdef O_DIRECT
 	if ((o_dir_in || o_dir_out) && hardbs < 512) {
@@ -1140,17 +1172,12 @@ int main(int argc, char* argv[])
 	if (o_dir_in || o_dir_out)
 		fplog(stderr, "dd_rescue: (warning): We don't handle misalignment of last block w/ O_DIRECT!\n");
 				
-#endif				
+#endif
 
 	if (softbs < hardbs) {
 		fplog(stderr, "dd_rescue: (warning): setting hardbs from %i to softbs %i!\n",
 		      hardbs, softbs);
 		hardbs = softbs;
-	}
-
-	if (hardbs <= 0) {
-		fplog(stderr, "dd_rescue: (fatal): you're crazy to set block size to %i!\n", hardbs);
-		cleanup(); exit(15);
 	}
 
 	/* Set sync frequency */
@@ -1167,7 +1194,7 @@ int main(int argc, char* argv[])
 		ipos = 0;
 
 #ifdef O_DIRECT
-	if (posix_memalign(&mp, sysconf(_SC_PAGESIZE), softbs)) {
+	if (posix_memalign(&mp, pagesize, softbs)) {
 		fplog(stderr, "dd_rescue: (fatal): allocation of aligned buffer failed!\n");
 		cleanup(); exit(18);
 	}
@@ -1374,8 +1401,6 @@ int main(int argc, char* argv[])
 	gettimeofday(&currenttime, NULL);
 	printreport();
 	cleanup();
-	if (pres)
-		copytimes(iname, oname);
 	return c;
 }
 
