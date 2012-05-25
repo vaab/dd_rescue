@@ -20,14 +20,13 @@
  * TODO:
  * - Use termcap to fetch cursor up/down codes
  * - Better handling of write errors: also try sub blocks
- * - Support non-seekable in/output
  */
 
 #ifndef VERSION
 # define VERSION "(unknown)"
 #endif
 
-#define ID "$Id: dd_rescue.c,v 1.46 2004/08/28 21:45:09 garloff Exp $"
+#define ID "$Id: dd_rescue.c,v 1.50 2005/02/14 00:39:44 garloff Exp $"
 
 #ifndef SOFTBLOCKSIZE
 # define SOFTBLOCKSIZE 65536
@@ -59,7 +58,7 @@
 int softbs, hardbs;
 int maxerr, nrerr, reverse, dotrunc, abwrerr, sparse, nosparse;
 int verbose, quiet, interact, force;
-char* buf;
+void* buf;
 char *lname, *iname, *oname;
 off_t ipos, opos, xfer, lxfer, sxfer, fxfer, maxxfer;
 
@@ -75,14 +74,6 @@ clock_t startclock;
 const char* up = "\x1b[A"; //] 
 const char* down = "\n";
 const char* right = "\x1b[C"; //]
-
-/* Large file support on kernel 2.4 glibc 2.1 systems */
-/* _FILE_OFFSET_BITS=64 should take care of it */
-#if 0 && defined(__GLIBC__) && __GLIBC__ == 2 && __GLIBC_MINOR__ == 1 && defined(O_LARGEFILE)
-const unsigned int olarge = O_LARGEFILE;
-#else
-const unsigned int olarge = 0;
-#endif
 
 inline float difftimetv(const struct timeval* const t2, 
 			const struct timeval* const t1)
@@ -139,9 +130,9 @@ int openfile(const char* const fname, const int flags)
 	} else
 		fdes = open(fname, flags, 0640);
 	if (fdes == -1) {
-		char buf[128];
-		snprintf(buf, 128, "dd_rescue: (fatal): open \"%s\" failed", fname);
-		perror(buf); exit(17);
+		char nbuf[128];
+		snprintf(nbuf, 128, "dd_rescue: (fatal): open \"%s\" failed", fname);
+		perror(nbuf); exit(17);
 	}
 	return fdes;
 }
@@ -192,9 +183,14 @@ void printstatus(FILE* const file1, FILE* const file2,
 {
 	float t1, t2; 
 	clock_t cl;
+	int err = 0;
 
-	if (sync) 
-		fsync(odes);
+	if (sync) {
+		err = fsync(odes);
+		if (err)
+			fplog(stderr, "dd_rescue: (warning): %s (%.1fk): %s!\n", 
+			      oname, (float)ipos/1024, strerror(errno));
+	}
 
 	gettimeofday(&currenttime, NULL);
 	t1 = difftimetv(&currenttime, &starttime);
@@ -226,19 +222,38 @@ void printreport()
 	printstatus(report, logfd, 0, 1);
 }
 
-void cleanup()
+int cleanup()
 {
+	int rc, errs = 0;
 	if (odes != -1) {
 		/* Make sure, the output file is expanded to the last (first) position */
 		pwrite(odes, buf, 0, opos);
-		close(odes); 
+		rc = fsync(odes);
+		if (rc) {
+			fplog(stderr, "dd_rescue: (warning): %s (%.1fk): %s!\n", 
+			      oname, (float)opos/1024, strerror(errno));
+			++errs;
+		}
+		rc = close(odes); 
+		if (rc) {
+			fplog(stderr, "dd_rescue: (warning): %s (%.1fk): %s!\n", 
+			      oname, (float)opos/1024, strerror(errno));
+			++errs;
+		}
 	}
-	if (ides != -1)
-		close(ides);
+	if (ides != -1) {
+		rc = close(ides);
+		if (rc) {
+			fplog(stderr, "dd_rescue: (warning): %s (%.1fk): %s!\n", 
+			      iname, (float)ipos/1024, strerror(errno));
+			++errs;
+		}
+	}
 	if (logfd)
 		fclose(logfd);
 	if (buf)
 		free(buf);
+	return errs;
 }
 
 /* is the block zero ? */
@@ -551,7 +566,9 @@ void printhelp()
 	fprintf(stderr, "         -l logfdile name of a file to log errors and summary to (def=\"\");\n");
 	fprintf(stderr, "         -r         reverse direction copy (def=forward);\n");
 	fprintf(stderr, "         -t         truncate output file (def=no);\n");
+#ifdef O_DIRECT
 	fprintf(stderr, "         -d/D       use O_DIRECT for input/output (def=no);\n");
+#endif
 	fprintf(stderr, "         -w         abort on Write errors (def=no);\n");
 	fprintf(stderr, "         -a         spArse file writing (def=no),\n");
 	fprintf(stderr, "         -A         Always write blocks, zeroed if err (def=no);\n");
@@ -601,6 +618,7 @@ void breakhandler(int sig)
 int main(int argc, char* argv[])
 {
 	int c;
+	void **mp = (void **) &buf;
 
   	/* defaults */
 	softbs = SOFTBLOCKSIZE; hardbs = HARDBLOCKSIZE;
@@ -620,8 +638,10 @@ int main(int argc, char* argv[])
 			case 't': dotrunc = O_TRUNC; break;
 			case 'i': interact = 1; force = 0; break;
 			case 'f': interact = 0; force = 1; break;
+#ifdef O_DIRECT
 			case 'd': o_dir_in  = O_DIRECT; break;
 			case 'D': o_dir_out = O_DIRECT; break;
+#endif
 			case 'p': pres = 1; break;
 			case 'a': sparse = 1; nosparse = 0; break;
 			case 'A': nosparse = 1; sparse = 0; break;
@@ -669,6 +689,18 @@ int main(int argc, char* argv[])
 	}
 
 	/* sanity checks */
+#ifdef O_DIRECT
+	if ((o_dir_in || o_dir_out) && hardbs < sysconf(_SC_PAGESIZE)) {
+		hardbs = sysconf(_SC_PAGESIZE);
+		fplog(stderr, "dd_rescue: (warning): O_DIRECT requires hardbs of at least %i!\n",
+		      hardbs);
+	}
+
+	if (o_dir_in || o_dir_out)
+		fplog(stderr, "dd_rescue: (warning): We don't handle misalignment of last block w/ O_DIRECT!\n");
+				
+#endif				
+
 	if (softbs < hardbs) {
 		fplog(stderr, "dd_rescue: (warning): setting hardbs from %i to softbs %i!\n",
 		      hardbs, softbs);
@@ -676,7 +708,7 @@ int main(int argc, char* argv[])
 	}
 
 	if (hardbs <= 0) {
-		fplog(stderr, "dd_rescue: (fatal): you're crazy to set you block size to %i!\n", hardbs);
+		fplog(stderr, "dd_rescue: (fatal): you're crazy to set block size to %i!\n", hardbs);
 		cleanup(); exit(15);
 	}
 
@@ -684,11 +716,19 @@ int main(int argc, char* argv[])
 	if (ipos == (off_t)-1) 
 		ipos = 0;
 
+#ifdef O_DIRECT
+	if (posix_memalign(mp, sysconf(_SC_PAGESIZE), softbs)) {
+		fplog(stderr, "dd_rescue: (fatal): allocation of aligned buffer failed!\n");
+		cleanup(); exit(18);
+	}
+#else
 	buf = malloc(softbs);
 	if (!buf) {
 		fplog(stderr, "dd_rescue: (fatal): allocation of buffer failed!\n");
 		cleanup(); exit(18);
 	}
+#endif
+
 	memset(buf, 0, softbs);
 
 	identical = check_identical(iname, oname);
@@ -697,7 +737,7 @@ int main(int argc, char* argv[])
 		cleanup(); exit(19);
 	}
 	/* Open input and output files */
-	ides = openfile(iname, O_RDONLY | olarge | o_dir_in);
+	ides = openfile(iname, O_RDONLY | o_dir_in);
 	if (ides < 0) {
 		fplog(stderr, "dd_rescue: (fatal): %s: %s\n", iname, strerror(errno));
 		cleanup(); exit(22);
@@ -706,7 +746,7 @@ int main(int argc, char* argv[])
 	/* Overwrite? */
 	/* Special case '-': stdout */
 	if (strcmp(oname, "-"))
-		odes = open(oname, O_WRONLY | olarge | o_dir_out, 0640);
+		odes = open(oname, O_WRONLY | o_dir_out, 0640);
 	else 
 		odes = 0;
 
@@ -726,7 +766,7 @@ int main(int argc, char* argv[])
 		}
 	}
 
-	odes = openfile(oname, O_WRONLY | O_CREAT | olarge | o_dir_out /*| O_EXCL*/ | dotrunc);
+	odes = openfile(oname, O_WRONLY | O_CREAT | o_dir_out /*| O_EXCL*/ | dotrunc);
 	if (odes < 0) {
 		fplog(stderr, "dd_rescue: (fatal): %s: %s\n", oname, strerror(errno));
 		cleanup(); exit(24);
