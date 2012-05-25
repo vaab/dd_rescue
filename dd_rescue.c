@@ -11,6 +11,9 @@
  *
  * (c) Kurt Garloff <garloff@suse.de>, 11/97, 10/99
  * Copyright: GNU GPL
+ *
+ * Improvements from LAB Valentin, see
+ * http://www.tharbad.ath.cx/~vaab/kalysto/Utilities/dd_rhelp/dd_rhelp_en.html
  */
 
 /*
@@ -23,7 +26,7 @@
 # define VERSION "(unknown)"
 #endif
 
-#define ID "$Id: dd_rescue.c,v 1.30 2001/07/24 12:08:10 garloff Exp $"
+#define ID "$Id: dd_rescue.c,v 1.33 2003/12/03 01:30:29 garloff Exp $"
 
 #ifndef SOFTBLOCKSIZE
 # define SOFTBLOCKSIZE 16384
@@ -137,18 +140,6 @@ void check_seekable (const int id, const int od)
 }
 
 
-void cleanup ()
-{
-  if (odes != -1) {
-    /* Make sure, the output file is expanded to the last (first) position */
-    pwrite (odes, buf, 0, opos);
-    close (odes); 
-  }
-  if (ides != -1) close (ides);
-  if (log) fclose (log);
-  if (buf) free (buf);
-}
-
 void doprint (FILE* const file, const int bs, const clock_t cl, 
 	      const float t1, const float t2, const int sync)
 {
@@ -169,6 +160,22 @@ void doprint (FILE* const file, const int bs, const clock_t cl,
 	   100*(cl-startclock)/(CLOCKS_PER_SEC*t1));
 
 }
+
+/* Write to file and simultaneously log to logfile, if exsiting */
+int fplog (FILE* const file, const char * const fmt, ...)
+{
+  int ret = 0;
+  va_list vl; 
+  va_start (vl, fmt);
+  if (file) ret = vfprintf (file, fmt, vl);
+  va_end (vl);
+  if (log) {
+    va_start (vl, fmt);
+    ret = vfprintf (log, fmt, vl);
+    va_end (vl);
+  }
+  return ret;
+};
 
 void printstatus (FILE* const file1, FILE* const file2, 
 		  const int bs, const int sync)
@@ -194,21 +201,27 @@ void printstatus (FILE* const file1, FILE* const file2,
   }
 }
 
-/* Write to file and simultaneously log to logfile, if exsiting */
-int fplog (FILE* const file, const char * const fmt, ...)
+void printreport ()
 {
-  int ret = 0;
-  va_list vl; 
-  va_start (vl, fmt);
-  if (file) ret = vfprintf (file, fmt, vl);
-  va_end (vl);
-  if (log) {
-    va_start (vl, fmt);
-    ret = vfprintf (log, fmt, vl);
-    va_end (vl);
+  /* report */
+  FILE *report = 0;
+  if (!quiet || nrerr) report = stderr;
+  fplog (report, "Summary for %s -> %s:\n", iname, oname);
+  if (report) fprintf (stderr, "%s%s%s", down, down, down);
+  if (report) printstatus (stderr, log, 0, 1);
+}
+
+void cleanup ()
+{
+  if (odes != -1) {
+    /* Make sure, the output file is expanded to the last (first) position */
+    pwrite (odes, buf, 0, opos);
+    close (odes); 
   }
-  return ret;
-};
+  if (ides != -1) close (ides);
+  if (log) fclose (log);
+  if (buf) free (buf);
+}
 
 /* is the block zero ? */
 int blockiszero (const char* blk, const int ln)
@@ -307,6 +320,7 @@ int copyfile (const off_t max, const int bs)
 	/* exit if too many errs */
 	if (maxerr && nrerr >= maxerr) {
 	  fplog (stderr, "dd_rescue: (fatal): maxerr reached!\n");
+	  printreport ();
 	  cleanup (); exit (32);
 	}
 	fprintf (stderr, "%s%s%s", down, down, down);
@@ -485,16 +499,6 @@ void printinfo (FILE* const file)
   fplog (file, "dd_rescue: (info): verbose: %s, quiet: %s\n", 
 	  YESNO(verbose), YESNO(quiet));
   */
-}
-
-void printreport ()
-{
-  /* report */
-  FILE *report = 0;
-  if (!quiet || nrerr) report = stderr;
-  fplog (report, "Summary for %s -> %s:\n", iname, oname);
-  if (report) fprintf (stderr, "%s%s%s", down, down, down);
-  if (report) printstatus (stderr, log, 0, 1);
 }
 
 void breakhandler (int sig)
