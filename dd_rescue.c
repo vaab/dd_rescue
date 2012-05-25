@@ -1,16 +1,29 @@
 /* dd_rescue.c */
 /* 
- * dd_rescue copies your data from one file to another.
- * Files might as well be block devices, such as hd partitions.
- * Unlike dd, it does not necessarily abort on errors but
- * continues to copy the disk, possibly leaving holes behind.
- * Also, it does NOT truncate the output file, so you can copy 
- * more and more pieces of your data, as time goes by.
- * This tool is thus suitable for rescueing data of crashed disk,
- * and that's the reason it has been written by me.
+ * dd_rescue copies your data from one file to another.  Files might as well be
+ * block devices, such as hd partitions.  Unlike dd, it does not necessarily
+ * abort on errors but continues to copy the disk, possibly leaving holes
+ * behind.  Also, it does NOT truncate the output file, so you can copy more
+ * and more pieces of your data, as time goes by.  This tool is thus suitable
+ * for rescueing data of crashed disk, and that's the reason it has been
+ * written by me.
  *
- * (c) Kurt Garloff <garloff@suse.de>, 11/97, 10/99
- * Copyright: GNU GPL
+ * Copyright (C) Kurt Garloff <kurt@garloff.de>, 11/1997 -- 01/2012
+ * License: GNU GPL v2 or v3
+ *
+ *  This program is free software; you can redistribute it and/or modify it
+ *  under the terms of the GNU General Public License as published by the Free
+ *  Software Foundation; either version 2 of the License, or (at your option)
+ *  version 3.
+ *
+ *  This program is distributed in the hope that it will be useful, but WITHOUT
+ *  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ *  FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+ *  more details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program; if not, write to the Free Software Foundation, Inc., 59 Temple
+ * Place, Suite 330, Boston, MA  02111-1307  USA
  *
  * Improvements from LAB Valentin, see
  * http://www.tharbad.ath.cx/~vaab/kalysto/Utilities/dd_rhelp/dd_rhelp_en.html
@@ -22,6 +35,7 @@
  * - Better handling of write errors: also try sub blocks
  * - Optional colors
  * - Use dlopen to open libfallocate rather than linking to it ...
+ * - Display more infos on errors by collecting info from syslog
  */
 
 #ifndef VERSION
@@ -31,7 +45,7 @@
 # define "(unknown compiler)"
 #endif
 
-#define ID "$Id: dd_rescue.c,v 1.116 2011/09/25 23:27:46 garloff Exp $"
+#define ID "$Id: dd_rescue.c,v 1.118 2012/02/04 13:12:53 garloff Exp $"
 
 #ifndef SOFTBLOCKSIZE
 # define SOFTBLOCKSIZE 65536
@@ -92,7 +106,7 @@ _syscall6(long, splice, int, fdin, loff_t*, off_in, int, fdout, loff_t*, off_out
 #endif
 
 
-int softbs, hardbs, syncfreq;
+unsigned int softbs, hardbs, syncfreq;
 int maxerr, nrerr, reverse, dotrunc, abwrerr, sparse, nosparse;
 int verbose, quiet, interact, force;
 unsigned char* buf;
@@ -442,14 +456,17 @@ void printstatus(FILE* const file1, FILE* const file2,
 	}
 }
 
-static void savebb(int block)
+static void savebb(unsigned long block)
 {
 	FILE *bbfile;
-	fplog(stderr, "Bad block reading %s: %d\n", iname, block);
+	fplog(stderr, "%s%s%s%sBad block reading %s: %lu %s%s%s%s\n", 
+			up, up, up, up,
+			iname, block,
+			down, down, down, down);
 	if (bbname == NULL)
 		return;
 	bbfile = fopen(bbname, "a");
-	fprintf(bbfile, "%d\n", block);
+	fprintf(bbfile, "%lu\n", block);
 	fclose(bbfile);
 }
 
@@ -605,12 +622,12 @@ int blockxfer(const off_t max, const int bs)
 	return block;
 }
 
-void exitfatalerr()
+void exitfatalerr(const int eno)
 {
-	if (errno == ESPIPE || errno == EPERM || errno == ENXIO || errno == ENODEV) {
-		fplog(stderr, "dd_rescue: (warning): %s (%.1fk): %s!\n", 
-		      iname, (float)ipos/1024, strerror(errno));
-		fplog(stderr, "dd_rescue: Last error fatal! Exiting ...\n");
+	if (eno == ESPIPE || eno == EPERM || eno == ENXIO || eno == ENODEV) {
+		fplog(stderr, "dd_rescue: (fatal): %s (%.1fk): %s! \n", 
+		      iname, (float)ipos/1024, strerror(eno));
+		fplog(stderr, "dd_rescue: Last error fatal! Exiting ... \n");
 		cleanup();
 		exit(20);
 	}
@@ -640,10 +657,11 @@ int dowrite(const ssize_t rd)
 		   || (errno == EFBIG && !reverse)))
 		++fatal;
 	if (rd != wr && !sparse) {
+		const int eno = errno;
 		fplog(stderr, "dd_rescue: (warning): assumption rd(%i) == wr(%i) failed! \n", rd, wr);
 		fplog(stderr, "dd_rescue: (%s): write %s (%.1fk): %s!\n", 
 		      (fatal? "fatal": "warning"), oname, 
-		      (float)opos/1024, strerror(errno));
+		      (float)opos/1024, strerror(eno));
 		fprintf(stderr, "%s%s%s", down, down, down);
 		errno = 0;
 	}
@@ -669,10 +687,12 @@ int copyfile_hardbs(const off_t max)
 		down, down, down, down);
 #endif
 	while ((toread = blockxfer(max, hardbs)) > 0) { 
+		int eno;
 		ssize_t rd = readblock(toread);
+		eno = errno;
 
 		/* EOF */
-		if (rd == 0 && !errno) {
+		if (rd == 0 && !eno) {
 			if (!quiet)
 				fplog(stderr, "dd_rescue: (info): read %s (%.1fk): EOF\n", 
 				      iname, (float)ipos/1024);
@@ -680,18 +700,18 @@ int copyfile_hardbs(const off_t max)
 		}
 		/* READ ERROR */
 		if (rd < toread/* && errno*/) {
-			if (errno) {
+			if (eno) {
 				++errs;
 				/* Read error occurred: Print warning */
 				printstatus(stderr, logfd, hardbs, 1);
 			}
 			/* Some errnos are fatal */
-			exitfatalerr();
+			exitfatalerr(eno);
 			/* Non fatal error */
 			/* Real error on small blocks: Don't retry */
 			nrerr++; 
 			fplog(stderr, "dd_rescue: (warning): read %s (%.1fk): %s!\n", 
-			      iname, (float)ipos/1024, strerror(errno));
+			      iname, (float)ipos/1024, strerror(eno));
 			/* exit if too many errs */
 			if (maxerr && nrerr >= maxerr) {
 				fplog(stderr, "dd_rescue: (fatal): maxerr reached!\n");
@@ -706,14 +726,15 @@ int copyfile_hardbs(const off_t max)
 				ssize_t wr = 0;
 				memset(buf+rd, 0, toread-rd);
 				errs += ((wr = writeblock(toread)) < toread ? 1: 0);
-				if (wr <= 0 && (errno == ENOSPC 
-					   || (errno == EFBIG && !reverse))) 
+				eno = errno;
+				if (wr <= 0 && (eno == ENOSPC 
+					   || (eno == EFBIG && !reverse))) 
 					return errs;
 				if (toread != wr) {
 					fplog(stderr, "dd_rescue: (warning): assumption toread(%i) == wr(%i) failed! \n", toread, wr);	
 					/*
 					fplog(stderr, "dd_rescue: (warning): %s (%.1fk): %s!\n", 
-					      oname, (float)opos/1024, strerror(errno));
+					      oname, (float)opos/1024, strerror(eno));
 					fprintf(stderr, "%s%s%s%s", down, down, down, down);
 				 	*/
 				}
@@ -745,7 +766,8 @@ int copyfile_hardbs(const off_t max)
 int copyfile_softbs(const off_t max)
 {
 	ssize_t toread;
-	int errs = 0; errno = 0;
+	int errs = 0; int eno;
+	errno = 0;
 #if 0	
 	fprintf(stderr, "%s%s%s%s copyfile (ipos=%.1fk, xfer=%.1fk, max=%.1fk, bs=%i)                         ##\n%s%s%s%s",
 		up, up, up, up,
@@ -756,12 +778,13 @@ int copyfile_softbs(const off_t max)
 	 * FIXME: 0 byte writes do NOT expand file */
 	if (!o_chr)
 		pwrite(odes, buf, 0, opos);
-	while ((toread = blockxfer(max, softbs)) > 0) { 
+	while ((toread = blockxfer(max, softbs)) > 0) {
 		int err;
 		ssize_t rd = readblock(toread);
+		eno = errno;
 
 		/* EOF */
-		if (rd == 0 && !errno) {
+		if (rd == 0 && !eno) {
 			if (!quiet)
 				fplog(stderr, "dd_rescue: (info): read %s (%.1fk): EOF\n", 
 				      iname, (float)ipos/1024);
@@ -771,19 +794,19 @@ int copyfile_softbs(const off_t max)
 		if (rd < toread/* && errno*/) {
 			int ret;
 			off_t new_max, old_xfer;
-			if (errno) {
+			if (eno) {
 				++errs;
 				/* Read error occurred: Print warning */
 				printstatus(stderr, logfd, softbs, 1);
 			}
 			/* Some errnos are fatal */
-			exitfatalerr();
+			exitfatalerr(eno);
 			/* Non fatal error */
 			new_max = xfer + toread;
 			/* Error with large blocks: Try small ones ... */
 			if (verbose) {
 				fprintf(stderr, "dd_rescue: (info): problems at ipos %.1fk: %s \n                 fall back to smaller blocksize \n%s%s%s%s",
-				        (float)ipos/1024, strerror(errno), down, down, down, down);
+				        (float)ipos/1024, strerror(eno), down, down, down, down);
 				printstatus(stderr, logfd, hardbs, 1);
 			}
 			/* But first: write available data and advance (optimization) */

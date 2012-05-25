@@ -1,13 +1,13 @@
 # Makefile for dd_rescue
 # (c) garloff@suse.de, 99/10/09, GNU GPL
-# $Id: Makefile,v 1.38 2011/10/04 13:15:12 garloff Exp $
+# $Id: Makefile,v 1.39 2012/01/22 13:40:34 garloff Exp $
 
-VERSION = 1.24
+VERSION = 1.25
 
 DESTDIR = 
 
 CC = gcc
-RPM_OPT_FLAGS = -O2 -Wall -g
+RPM_OPT_FLAGS = -Os -Wall -g
 CFLAGS = $(RPM_OPT_FLAGS) $(EXTRA_CFLAGS)
 INSTALL = install
 INSTALLFLAGS = -s
