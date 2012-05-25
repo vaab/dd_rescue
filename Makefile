@@ -1,8 +1,8 @@
 # Makefile for dd_rescue
 # (c) garloff@suse.de, 99/10/09, GNU GPL
-# $Id: Makefile,v 1.36 2010/10/11 09:37:37 garloff Exp $
+# $Id: Makefile,v 1.38 2011/10/04 13:15:12 garloff Exp $
 
-VERSION = 1.23
+VERSION = 1.24
 
 DESTDIR = 
 
@@ -55,7 +55,7 @@ distclean: clean
 	rm -f *~
 
 dist: distclean
-	tar cvzf ../dd_rescue-$(VERSION).tar.gz -C.. --exclude=$(MYDIR)/CV* --exclude $(MYDIR)/dd_rescue2 --exclude $(MYDIR)/.*.sw? $(MYDIR)
+	tar cvzf ../dd_rescue-$(VERSION).tar.gz -C.. --exclude=$(MYDIR)/CV* --exclude $(MYDIR)/dd_rescue2* --exclude $(MYDIR)/.*.sw? $(MYDIR)
 
 install: $(TARGETS)
 	mkdir -p $(INSTALLDIR)

@@ -31,7 +31,7 @@
 # define "(unknown compiler)"
 #endif
 
-#define ID "$Id: dd_rescue.c,v 1.112 2010/10/11 09:50:32 garloff Exp $"
+#define ID "$Id: dd_rescue.c,v 1.116 2011/09/25 23:27:46 garloff Exp $"
 
 #ifndef SOFTBLOCKSIZE
 # define SOFTBLOCKSIZE 65536
@@ -75,6 +75,10 @@
 # include <asm/unistd.h>
 # ifdef __NR_splice
 #  define HAVE_SPLICE 1
+#  ifndef SPLICE_F_MOVE	/* from fcntl.h on x86-64 linux */
+#   define SPLICE_F_MOVE 1
+#   define SPLICE_F_MORE 4
+#  endif
 #  if 1
 static inline long splice(int fdin, loff_t *off_in, int fdout, 
 			      loff_t *off_out, size_t len, unsigned int flags)
@@ -182,6 +186,11 @@ static int check_identical(const char* const in, const char* const on)
 	return 0;
 }
 
+static char* safe_strcat(char* base, const char* toapp)
+{
+	char* str = realloc(base, strlen(base) + strlen(toapp) + 1);
+	return strcat(str, toapp);
+}
 
 static int openfile(const char* const fname, const int flags)
 {
@@ -509,6 +518,10 @@ int cleanup()
 		fclose(logfd);
 	if (buf)
 		free(buf);
+	if (graph)
+		free(graph);
+	if (oname)
+		free(oname);
 	return errs;
 }
 
@@ -1072,7 +1085,7 @@ int main(int argc, char* argv[])
 	if (optind < argc) 
 		iname = argv[optind++];
 	if (optind < argc) 
-		oname = argv[optind++];
+		oname = strdup(argv[optind++]);
 	if (optind < argc) {
 		fplog(stderr, "dd_rescue: (fatal): spurious options: %s ...\n", argv[optind]);
 		printhelp();
@@ -1140,6 +1153,32 @@ int main(int argc, char* argv[])
 #endif
 
 	memset(buf, 0, softbs);
+
+	/* Special case '.': same as iname (w/o path) */
+	if (!strcmp(oname, ".")) {
+		free(oname);
+		oname = strdup(basename(iname));
+	} else { /* Is oname a directory? */
+		size_t oln = strlen(oname);
+		if (oln > 0) {
+			char lastchr = oname[oln-1];
+			if (lastchr == '/')
+				oname = safe_strcat(oname, basename(iname));
+			else if ((lastchr == '.') &&
+				  ((oln > 1 && oname[oln-2] == '/') ||
+				   (oln > 2 && oname[oln-2] == '.' && oname[oln-3] == '/'))) {
+					oname = safe_strcat(oname, "/");
+					oname = safe_strcat(oname, basename(iname));
+			} else { /* Not clear by name, so test */
+				struct stat stbuf;
+				int err = stat(oname, &stbuf);
+				if (!err && S_ISDIR(stbuf.st_mode)) {
+					oname = safe_strcat(oname, "/");
+					oname = safe_strcat(oname, basename(iname));
+				}
+			}
+		}
+	}
 
 	identical = check_identical(iname, oname);
 	if (identical && dotrunc && !force) {
