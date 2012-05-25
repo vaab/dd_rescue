@@ -1,8 +1,8 @@
 # Makefile for dd_rescue
 # (c) garloff@suse.de, 99/10/09, GNU GPL
-# $Id: Makefile,v 1.17 2004/10/18 11:28:18 garloff Exp $
+# $Id: Makefile,v 1.18 2006/07/23 11:47:50 garloff Exp $
 
-VERSION = 1.11
+VERSION = 1.12
 
 DESTDIR = 
 
