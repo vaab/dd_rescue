@@ -31,11 +31,15 @@
 
 /*
  * TODO:
+ * - Change default block sizes as suggested bz Jan Kara ...
+ * - Provide options to copy ACLs/xattrs as well
  * - Use termcap to fetch cursor up/down codes
  * - Better handling of write errors: also try sub blocks
  * - Optional colors
  * - Use dlopen to open libfallocate rather than linking to it ...
  * - Display more infos on errors by collecting info from syslog
+ * - Option to use frandom as virtual input device (Thomas)
+ * - Option to avoid overwriting identical output to be nice to SSD (Thomas)
  */
 
 #ifndef VERSION
@@ -45,7 +49,7 @@
 # define "(unknown compiler)"
 #endif
 
-#define ID "$Id: dd_rescue.c,v 1.118 2012/02/04 13:12:53 garloff Exp $"
+#define ID "$Id: dd_rescue.c,v 1.129 2012/05/17 19:32:02 garloff Exp $"
 
 #ifndef SOFTBLOCKSIZE
 # define SOFTBLOCKSIZE 65536
@@ -164,7 +168,7 @@ inline float difftimetv(const struct timeval* const t2,
 		(float) (t2->tv_usec - t1->tv_usec) * 1e-6;
 }
 
-/* Write to file and simultaneously log to logfdile, if exsiting */
+/* Write to file and simultaneously log to logfdile, if existing */
 int fplog(FILE* const file, const char * const fmt, ...)
 {
 	int ret = 0;
@@ -254,7 +258,7 @@ inline int gpos(off_t off)
 /* Prepare graph */
 static void preparegraph()
 {
-	if (!ilen)
+	if (!ilen || ipos > ilen)
 		return;
 	graph = strdup(":.........................................:");
 	if (reverse) {
@@ -270,7 +274,7 @@ static void preparegraph()
 void updgraph(int err)
 {
 	int off;
-	if (!ilen)
+	if (!ilen || ipos > ilen)
 		return;
 	off = gpos(ipos);
 	if (graph[off] == 'x')
@@ -329,6 +333,8 @@ void input_length()
 		estxfer = ipos;
 	if (maxxfer && estxfer > maxxfer)
 		estxfer = maxxfer;
+	if (estxfer < 0)
+		estxfer = 0;
 	if (!quiet)
 		fplog(stderr, "dd_rescue: (info) expect to copy %LikB from %s\n",
 			estxfer/1024, iname);
@@ -459,10 +465,8 @@ void printstatus(FILE* const file1, FILE* const file2,
 static void savebb(unsigned long block)
 {
 	FILE *bbfile;
-	fplog(stderr, "%s%s%s%sBad block reading %s: %lu %s%s%s%s\n", 
-			up, up, up, up,
-			iname, block,
-			down, down, down, down);
+	fplog(stderr, "Bad block reading %s: %lu \n", 
+			iname, block);
 	if (bbname == NULL)
 		return;
 	bbfile = fopen(bbname, "a");
@@ -712,14 +716,7 @@ int copyfile_hardbs(const off_t max)
 			nrerr++; 
 			fplog(stderr, "dd_rescue: (warning): read %s (%.1fk): %s!\n", 
 			      iname, (float)ipos/1024, strerror(eno));
-			/* exit if too many errs */
-			if (maxerr && nrerr >= maxerr) {
-				fplog(stderr, "dd_rescue: (fatal): maxerr reached!\n");
-				printreport();
-				cleanup(); exit(32);
-			}
-			fprintf(stderr, "%s%s%s%s", down, down, down, down);
-			
+		
 			errno = 0;
 			if (nosparse || 
 			    (rd > 0 && (!sparse || blockiszero(buf, rd) < rd))) {
@@ -747,6 +744,13 @@ int copyfile_hardbs(const off_t max)
 			} else { 
 				ipos += toread; opos += toread; 
 			}
+			/* exit if too many errs */
+			if (maxerr && nrerr >= maxerr) {
+				fplog(stderr, "dd_rescue: (fatal): maxerr reached!\n");
+				printreport();
+				cleanup(); exit(32);
+			}
+			fprintf(stderr, "%s%s%s%s", down, down, down, down);
 		} else {
 	      		int err = dowrite(rd);
 			if (err < 0)
@@ -1046,7 +1050,7 @@ int main(int argc, char* argv[])
 	int c;
 	off_t syncsz = -1;
 #ifdef O_DIRECT
-	void **mp = (void **) &buf;
+	void *mp;
 #endif
 
   	/* defaults */
@@ -1127,8 +1131,8 @@ int main(int argc, char* argv[])
 
 	/* sanity checks */
 #ifdef O_DIRECT
-	if ((o_dir_in || o_dir_out) && hardbs < sysconf(_SC_PAGESIZE)) {
-		hardbs = sysconf(_SC_PAGESIZE);
+	if ((o_dir_in || o_dir_out) && hardbs < 512) {
+		hardbs = 512;
 		fplog(stderr, "dd_rescue: (warning): O_DIRECT requires hardbs of at least %i!\n",
 		      hardbs);
 	}
@@ -1163,10 +1167,11 @@ int main(int argc, char* argv[])
 		ipos = 0;
 
 #ifdef O_DIRECT
-	if (posix_memalign(mp, sysconf(_SC_PAGESIZE), softbs)) {
+	if (posix_memalign(&mp, sysconf(_SC_PAGESIZE), softbs)) {
 		fplog(stderr, "dd_rescue: (fatal): allocation of aligned buffer failed!\n");
 		cleanup(); exit(18);
 	}
+	buf = mp;
 #else
 	buf = malloc(softbs);
 	if (!buf) {
@@ -1288,6 +1293,12 @@ int main(int argc, char* argv[])
 	/* if opos not set, assume same position */
 	if (opos == (off_t)-1) 
 		opos = ipos;
+
+	if (ipos < 0 || opos < 0) {
+		fplog(stderr, "dd_rescue: (fatal): negative position requested (%.1fk)\n", (float)ipos/1024);
+		cleanup(); exit(25);
+	}
+
 
 	if (identical) {
 		fplog(stderr, "dd_rescue: (warning): infile and outfile are identical!\n");
