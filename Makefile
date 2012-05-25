@@ -1,15 +1,14 @@
 # Makefile for dd_rescue
 # (c) garloff@suse.de, 99/10/09, GNU GPL
-# $Id: Makefile,v 1.33 2010/08/30 21:42:05 garloff Exp $
+# $Id: Makefile,v 1.35 2010/09/08 14:04:04 garloff Exp $
 
-VERSION = 1.21
+VERSION = 1.22
 
 DESTDIR = 
 
 CC = gcc
 RPM_OPT_FLAGS = -O2 -Wall -g
 CFLAGS = $(RPM_OPT_FLAGS) $(EXTRA_CFLAGS)
-DEFINES = -DVERSION=\"$(VERSION)\" 
 INSTALL = install
 INSTALLFLAGS = -s
 prefix = $(DESTDIR)/usr
@@ -22,6 +21,15 @@ OBJECTS = dd_rescue.o
 DOCDIR = $(prefix)/share/doc/packages
 INSTASROOT = -o root -g root
 LIBDIR = /usr/lib
+COMPILER = $(shell $(CC) --version | head -n1)
+DEFINES = -DVERSION=\"$(VERSION)\"  -D__COMPILER__="\"$(COMPILER)\""
+OUT = -o $@
+
+ifeq ($(CC),wcl386)
+  CFLAGS = "-ox -wx $(EXTRA_CFLAGS)"
+  DEFINES = -dMISS_STRSIGNAL -dMISS_PREAD -dVERSION=\"$(VERSION)\" -d__COMPILER__="\"$(COMPILER)\""
+  OUT = ""
+endif
 
 default: $(TARGETS)
 
@@ -35,7 +43,7 @@ falloc: dd_rescue.c
 	$(CC) $(CFLAGS) -DHAVE_FALLOCATE=1 $(DEFINES) $< -o dd_rescue
 
 dd_rescue: dd_rescue.c
-	$(CC) $(CFLAGS) $(DEFINES) $< -o $@
+	$(CC) $(CFLAGS) $(DEFINES) $< $(OUT)
 
 strip: dd_rescue
 	strip -S $<

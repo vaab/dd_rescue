@@ -27,8 +27,11 @@
 #ifndef VERSION
 # define VERSION "(unknown)"
 #endif
+#ifndef __COMPILER__
+# define "(unknown compiler)"
+#endif
 
-#define ID "$Id: dd_rescue.c,v 1.103 2010/08/30 21:42:05 garloff Exp $"
+#define ID "$Id: dd_rescue.c,v 1.110 2010/09/08 22:50:02 garloff Exp $"
 
 #ifndef SOFTBLOCKSIZE
 # define SOFTBLOCKSIZE 65536
@@ -48,13 +51,15 @@
 #include <unistd.h>
 #include <string.h>
 #include <ctype.h>
-#include <getopt.h>
 #include <errno.h>
 #include <signal.h>
 #include <time.h>
 #include <utime.h>
 #include <sys/time.h>
 #include <sys/stat.h>
+#ifdef HAVE_GETOPT_H
+#include <getopt.h>
+#endif
 // hack around buggy splice definition(!)
 #define splice oldsplice
 #include <fcntl.h>
@@ -86,7 +91,7 @@ _syscall6(long, splice, int, fdin, loff_t*, off_in, int, fdout, loff_t*, off_out
 int softbs, hardbs, syncfreq;
 int maxerr, nrerr, reverse, dotrunc, abwrerr, sparse, nosparse;
 int verbose, quiet, interact, force;
-void* buf;
+unsigned char* buf;
 char *lname, *iname, *oname, *bbname = NULL;
 off_t ipos, opos, xfer, lxfer, sxfer, fxfer, maxxfer, init_opos, ilen, estxfer;
 
@@ -109,6 +114,30 @@ const char* up = UP;
 const char* down = DOWN;
 const char* right = RIGHT;
 char *graph;
+
+#ifdef MISS_STRSIGNAL
+static char sbuf[16];
+static char* strsignal(int sig)
+{
+	sprintf(sbuf, "sig %i", sig);
+	return sbuf;
+}
+#endif
+#ifdef MISS_PREAD
+static ssize_t pread(int fd, void *buf, size_t sz, off_t off)
+{
+	if (lseek(fd, off, SEEK_SET))
+		return -1;
+	return read(fd, buf, sz);
+}
+
+static ssize_t pwrite(int fd, void *buf, size_t sz, off_t off)
+{
+	if (lseek(fd, off, SEEK_SET))
+		return -1;
+	return write(fd, buf, sz);
+}
+#endif
 
 inline float difftimetv(const struct timeval* const t2, 
 			const struct timeval* const t1)
@@ -200,8 +229,10 @@ inline int gpos(off_t off)
 }
 
 /* Prepare graph */
-void preparegraph()
+static void preparegraph()
 {
+	if (!ilen)
+		return;
 	graph = strdup(":.........................................:");
 	if (reverse) {
 		graph[gpos(ipos)+1] = '<';
@@ -232,9 +263,12 @@ void input_length()
 {
 	struct stat stbuf;
 	estxfer = maxxfer;
-	if (reverse)
-		ilen = ipos;
-	else
+	if (reverse) {
+		if (ipos)
+			ilen = ipos;
+		else
+			ilen = maxxfer;
+	} else
 		ilen = ipos + maxxfer;
 	if (estxfer)
 		preparegraph();
@@ -277,9 +311,10 @@ void input_length()
 	preparegraph();
 }
 
-void sparse_output_warn()
+static void sparse_output_warn()
 {
 	struct stat stbuf;
+	off_t eff_opos;
 	if (o_chr)
 		return;
 	if (fstat(odes, &stbuf))
@@ -293,14 +328,14 @@ void sparse_output_warn()
 			fplog(stderr, "dd_rescue: (warning): %s is a block device; -a not recommended; -A recommended\n", oname);
 		return;
 	}
-	off_t eff_opos = opos == -1? ipos: opos;
+	eff_opos = opos == -1? ipos: opos;
 	if (sparse && (eff_opos < stbuf.st_size))
 		fplog(stderr, "dd_rescue: (warning): write into %s (@%li/%li): sparse not recommended\n", 
 				oname, eff_opos, stbuf.st_size);
 }
 
 #ifdef HAVE_FALLOCATE
-void do_fallocate()
+static void do_fallocate()
 {
 	struct stat stbuf;
 	off_t to_falloc, alloced;
@@ -473,7 +508,7 @@ int cleanup()
 }
 
 /* is the block zero ? */
-static int blockiszero(const char* blk, const int ln)
+static int blockiszero(const unsigned char* blk, const int ln)
 {
 	unsigned long* ptr = (unsigned long*)blk;
 	while ((ptr-(unsigned long*)blk) < ln/sizeof(unsigned long))
@@ -715,13 +750,14 @@ int copyfile_softbs(const off_t max)
 		/* READ ERROR */
 		if (rd < toread/* && errno*/) {
 			int ret;
+			off_t new_max, old_xfer;
 			++errs;
 			/* Read error occurred: Print warning */
 			printstatus(stderr, logfd, softbs, 1); 
 			/* Some errnos are fatal */
 			exitfatalerr();
 			/* Non fatal error */
-			off_t new_max = xfer + toread;
+			new_max = xfer + toread;
 			/* Error with large blocks: Try small ones ... */
 			if (verbose) 
 				fprintf(stderr, "dd_rescue: (info): problems at ipos %.1fk: %s \n                 fall back to smaller blocksize \n%s%s%s%s",
@@ -731,7 +767,7 @@ int copyfile_softbs(const off_t max)
 				return ret;
 			else
 				errs += ret;
-			off_t old_xfer = xfer;
+			old_xfer = xfer;
 			errs += (err = copyfile_hardbs(new_max));
 			/* EOF */
 			if (!err && old_xfer == xfer)
@@ -759,7 +795,7 @@ int copyfile_softbs(const off_t max)
 				fprintf(stderr, "dd_rescue: (info): ipos %.1fk promote to large bs again! \n%s%s%s%s",
 					(float)ipos/1024, down, down, down, down);
 		} else {
-	      		int err = dowrite(rd);
+	      		err = dowrite(rd);
 			if (err < 0)
 				return -err;
 			else
@@ -869,6 +905,20 @@ void printversion()
 {
 	fprintf(stderr, "\ndd_rescue Version %s, garloff@suse.de, GNU GPL\n", VERSION);
 	fprintf(stderr, " (%s)\n", ID);
+	fprintf(stderr, " (compiled %s %s by %s)\n", __DATE__, __TIME__, __COMPILER__);
+	fprintf(stderr, " (features: ");
+#ifdef O_DIRECT
+	fprintf(stderr, "O_DIRECT ");
+#endif
+#ifdef HAVE_LIBFALLOCATE
+	fprintf(stderr, "libfallocate ");
+#elif defined(HAVE_FALLOCATE)
+	fprintf(stderr, "fallocate ");
+#endif
+#ifdef HAVE_SPLICE
+	fprintf(stderr, "splice ");
+#endif
+	fprintf(stderr, ")\n");
 }
 
 void printhelp()
@@ -946,7 +996,9 @@ int main(int argc, char* argv[])
 {
 	int c;
 	off_t syncsz = -1;
+#ifdef O_DIRECT
 	void **mp = (void **) &buf;
+#endif
 
   	/* defaults */
 	softbs = SOFTBLOCKSIZE; hardbs = HARDBLOCKSIZE;
@@ -1102,7 +1154,7 @@ int main(int argc, char* argv[])
 		do {
 			fprintf(stderr, "dd_rescue: (question): %s existing %s [y/n] ?", 
 				(dotrunc? "Overwrite": "Write into"), oname);
-			a = toupper(fgetc (stdin)); //fprintf(stderr, "\n");
+			a = toupper(fgetc(stdin)); //fprintf(stderr, "\n");
 		} while (a != 'Y' && a != 'N');
 		if (a == 'N') {
 			fplog(stderr, "dd_rescue: (fatal): exit on user request!\n");
@@ -1120,12 +1172,6 @@ int main(int argc, char* argv[])
 		copyperm(ides, odes);
 			
 	check_seekable(ides, odes);
-
-	if (0 && i_chr && o_chr) {
-		fprintf(stderr, "dd_rescue: (fatal): Sorry, there is no support yet for non-seekable\n");
-		fprintf(stderr, "                    input and output. This will hopefully change soon ... \n");
-		exit(19);
-	}
 
 	sparse_output_warn();
 	if (o_chr) {
@@ -1228,9 +1274,15 @@ int main(int argc, char* argv[])
 #ifdef HAVE_SPLICE
 	if (dosplice)
 		c = copyfile_splice(maxxfer);
-	else
+	else 
 #endif
-		c = copyfile_softbs(maxxfer);
+	{
+		if (softbs > hardbs)
+			c = copyfile_softbs(maxxfer);
+		else
+			c = copyfile_hardbs(maxxfer);
+	}
+
 	gettimeofday(&currenttime, NULL);
 	printreport();
 	cleanup();
