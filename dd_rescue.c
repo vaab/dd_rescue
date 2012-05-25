@@ -1,13 +1,13 @@
 /* dd_rescue.c */
 /* 
- * dd_rescue copies your data from one file to another
- * files might as well be block devices, such as hd partitions
- * unlike dd, it does not necessarily abort on errors, but
+ * dd_rescue copies your data from one file to another.
+ * Files might as well be block devices, such as hd partitions.
+ * Unlike dd, it does not necessarily abort on errors but
  * continues to copy the disk, possibly leaving holes behind.
  * Also, it does NOT truncate the output file, so you can copy 
  * more and more pieces of your data, as time goes by.
- * So, this tool is suitable for rescueing data of crashed disk,
- * and that's the reason, it has been written by me.
+ * This tool is thus suitable for rescueing data of crashed disk,
+ * and that's the reason it has been written by me.
  *
  * (c) Kurt Garloff <garloff@suse.de>, 11/97, 10/99
  * Copyright: GNU GPL
@@ -26,7 +26,7 @@
 # define VERSION "(unknown)"
 #endif
 
-#define ID "$Id: dd_rescue.c,v 1.55 2007/03/18 14:29:10 garloff Exp $"
+#define ID "$Id: dd_rescue.c,v 1.59 2007/08/26 13:42:44 garloff Exp $"
 
 #ifndef SOFTBLOCKSIZE
 # define SOFTBLOCKSIZE 65536
@@ -60,7 +60,7 @@ int maxerr, nrerr, reverse, dotrunc, abwrerr, sparse, nosparse;
 int verbose, quiet, interact, force;
 void* buf;
 char *lname, *iname, *oname, *bbname = NULL;
-off_t ipos, opos, xfer, lxfer, sxfer, fxfer, maxxfer;
+off_t ipos, opos, xfer, lxfer, sxfer, fxfer, maxxfer, init_opos;
 
 int ides, odes, identical, pres;
 int o_dir_in, o_dir_out;
@@ -71,9 +71,17 @@ struct timeval starttime, lasttime, currenttime;
 struct timezone tz;
 clock_t startclock;
 
-const char* up = "\x1b[A"; //] 
-const char* down = "\n";
-const char* right = "\x1b[C"; //]
+#ifndef UP
+# define UP "\x1b[A"
+# define DOWN "\n"
+# define RIGHT "\x1b[C"
+#endif
+
+const char* up = UP;
+const char* down = DOWN;
+const char* right = RIGHT;
+
+int lastsparse = 0;
 
 inline float difftimetv(const struct timeval* const t2, 
 			const struct timeval* const t1)
@@ -232,11 +240,27 @@ void printreport()
 	printstatus(report, logfd, 0, 1);
 }
 
+int mayexpandfile()
+{	
+	struct stat st;
+	off_t maxopos = opos;
+	if (init_opos > opos)
+		maxopos = init_opos;
+	stat(oname, &st);
+	if (!S_ISREG(st.st_mode))
+		return 0;
+	if (st.st_size < maxopos)
+		return truncate(oname, maxopos);
+	else 
+		return 0;		
+}
+
 int cleanup()
 {
 	int rc, errs = 0;
 	if (odes != -1) {
-		/* Make sure, the output file is expanded to the last (first) position */
+		/* Make sure, the output file is expanded to the last (first) position
+	 	 * FIXME: 0 byte writes do NOT expand file */
 		pwrite(odes, buf, 0, opos);
 		rc = fsync(odes);
 		if (rc) {
@@ -250,6 +274,11 @@ int cleanup()
 			      oname, (float)opos/1024, strerror(errno));
 			++errs;
 		}
+		if (sparse)
+			rc = mayexpandfile();
+			if (rc)
+				fplog(stderr, "dd_rescue: (warning): %s (%1.fk): %s!\n",
+				      oname, (float)opos/1024, strerror(errno));
 	}
 	if (ides != -1) {
 		rc = close(ides);
@@ -272,8 +301,8 @@ int blockiszero(const char* blk, const int ln)
 	unsigned long* ptr = (unsigned long*)blk;
 	while ((ptr-(unsigned long*)blk) < ln/sizeof(unsigned long))
 		if (*(ptr++)) 
-			return 0;
-	return 1;
+			return (sizeof(unsigned long)*(ptr-(unsigned long*)blk));
+	return ln;
 }
 
 inline ssize_t mypread(int fd, void* bf, size_t sz, off_t off)
@@ -340,8 +369,9 @@ int copyfile(const off_t max, const int bs)
 		(float)ipos/1024, (float)xfer/1024, (float)max/1024, bs,
 		down, down, down);
 #endif
-	/* expand file to the right length */
-	if (!o_chr) 
+	/* expand file to AT LEAST the right length 
+	 * FIXME: 0 byte writes do NOT expand file */
+	if (!o_chr)
 		pwrite(odes, buf, 0, opos);
 	while ( (!max || (max-xfer > 0))
 		&& ((!reverse) || (ipos > 0 && opos > 0)) ) {
@@ -396,6 +426,7 @@ int copyfile(const off_t max, const int bs)
 				if (nosparse) {
 					ssize_t wr = 0;
 					errs += ((wr = writeblock(toread)) < toread ? 1: 0);
+					lastsparse = 0;
 					if (wr < 0 && (errno == ENOSPC 
 						   || (errno == EFBIG && !reverse))) 
 						return errs;
@@ -425,8 +456,12 @@ int copyfile(const off_t max, const int bs)
 				/* But first: write available data and advance (optimization) */
 				if (rd > 0) {
 					ssize_t wr = 0; errno = 0;
-					if (!sparse || !blockiszero(buf, bs))
+					if (!sparse || blockiszero(buf, bs) < rd) {
 						errs += ((wr = writeblock(rd)) < rd ? 1: 0);
+						lastsparse = 0;
+					} else
+						lastsparse = 1;
+
 					if (!reverse) {
 						ipos += rd; opos += rd; 
 						sxfer += wr; xfer += rd;
@@ -451,7 +486,7 @@ int copyfile(const off_t max, const int bs)
 				old_xfer = xfer;
 				errs += (err = copyfile(new_max, hardbs));
 				/* EOF */
-				if (!err && old_xfer == xfer) 
+				if (!err && old_xfer == xfer)
 					return errs;
 				/*
 				if (reverse && rd) {
@@ -470,7 +505,7 @@ int copyfile(const off_t max, const int bs)
 				}
 				errno = 0;
 				/* EOF ? */      
-				if (!err && xfer == old_xfer) 
+				if (!err && xfer == old_xfer)
 					return errs;
 				if (verbose) 
 					fprintf(stderr, "dd_rescue: (info): ipos %.1fk promote to large bs again! \n%s%s%s",
@@ -480,8 +515,11 @@ int copyfile(const off_t max, const int bs)
 	      		/* errno == 0: We can write to disk */
       			if (rd > 0) {
 				ssize_t wr = 0;
-				if (!sparse || !blockiszero(buf, bs))
+				if (!sparse || blockiszero(buf, bs) < rd) {
 					errs += ((wr = writeblock(rd)) < rd ? 1: 0);
+					lastsparse = 0;
+				} else
+					lastsparse = 1;
 				sxfer += wr; xfer += rd;
 				if (reverse) { 
 					ipos -= rd; opos -= rd; 
@@ -685,6 +723,7 @@ int main(int argc, char* argv[])
 		}
 	}
   
+	init_opos = opos;
 	if (optind < argc) 
 		iname = argv[optind++];
 	if (optind < argc) 
@@ -892,7 +931,6 @@ int main(int argc, char* argv[])
 	}
 
 	c = copyfile(maxxfer, softbs);
-
 	gettimeofday(&currenttime, NULL);
 	printreport();
 	cleanup();
