@@ -15,14 +15,15 @@
 
 /*
  * TODO:
- * - Use termcap to fetch cursor up code
+ * - Use termcap to fetch cursor up/down codes
+ * - Better handling of write errors: also try sub blocks
  */
 
 #ifndef VERSION
 # define VERSION "(unknown)"
 #endif
 
-#define ID "$Id: dd_rescue.c,v 1.27 2001/04/30 14:00:11 garloff Exp $"
+#define ID "$Id: dd_rescue.c,v 1.30 2001/07/24 12:08:10 garloff Exp $"
 
 #ifndef SOFTBLOCKSIZE
 # define SOFTBLOCKSIZE 16384
@@ -33,7 +34,7 @@
 #endif
 
 #define _GNU_SOURCE
-//#define _LARGEFILE64_SOURCE
+#define _LARGEFILE_SOURCE
 #define _FILE_OFFSET_BITS 64
 
 #include <stdio.h>
@@ -68,6 +69,14 @@ clock_t startclock;
 const char* up = "\x1b[A"; //] 
 const char* down = "\n";
 const char* right = "\x1b[C"; //]
+
+/* Large file support on kernel 2.4 glibc 2.1 systems */
+/* _FILE_OFFSET_BITS=64 should take care of it */
+#if 0 && defined(__GLIBC__) && __GLIBC__ == 2 && __GLIBC_MINOR__ == 1 && defined(O_LARGEFILE)
+const unsigned int olarge = O_LARGEFILE;
+#else
+const unsigned int olarge = 0;
+#endif
 
 inline float difftimetv (const struct timeval* const t2, 
 			 const struct timeval* const t1)
@@ -202,7 +211,7 @@ int fplog (FILE* const file, const char * const fmt, ...)
 };
 
 /* is the block zero ? */
-int blockzero (const char* blk, const int ln)
+int blockiszero (const char* blk, const int ln)
 {
   unsigned long* ptr = (unsigned long*)blk;
   while ((ptr-(unsigned long*)blk) < ln/sizeof(unsigned long))
@@ -214,26 +223,26 @@ int blockzero (const char* blk, const int ln)
 ssize_t readblock (const int toread)
 {
   ssize_t err, rd = 0;
-  errno = 0; /* should not be necessary */
+  //errno = 0; /* should not be necessary */
   do {
     rd += (err = pread (ides, buf+rd, toread-rd, ipos+rd-reverse*toread));
     if (err == -1) rd++;
   } while ((err == -1 && (errno == EINTR || errno == EAGAIN))
-	   || (errno == 0 && rd < toread && err > 0));
+	   || (rd < toread && err > 0 && errno == 0));
   //if (rd < toread) memset (buf+rd, 0, toread-rd);
-  return (err == -1? err: rd);
+  return (/*err == -1? err:*/ rd);
 }
 
 ssize_t writeblock (const int towrite)
 {
   ssize_t err, wr = 0;
-  errno = 0; /* should not be necessary */
+  //errno = 0; /* should not be necessary */
   do {
     wr += (err = pwrite (odes, buf+wr, towrite-wr, opos+wr-reverse*towrite));
     if (err == -1) wr++;
   } while ((err == -1 && (errno == EINTR || errno == EAGAIN))
-	   || (errno == 0 && wr < towrite && err > 0));
-  if (errno) {
+	   || (wr < towrite && err > 0 && errno == 0));
+  if (wr < towrite && err != 0) {
     /* Write error: handle ? .. */
     fplog (stderr, "dd_rescue: (%s): %s (%.1fk): %s\n",
 	   (abwrerr? "fatal": "warning"),
@@ -243,13 +252,19 @@ ssize_t writeblock (const int towrite)
     }
     nrerr++;
   }
-  return (err == -1? err: wr);
+  return (/*err == -1? err:*/ wr);
 }
 
 /* can be invoked in two ways: bs==hardbs or bs==softbs */
 int copyfile (const off_t max, const int bs)
 {
   int errs = 0; errno = 0;
+#if 0	
+  fprintf (stderr, "%s%s%s copyfile (ipos=%.1fk, xfer=%.1fk, max=%.1fk, bs=%i)                         ##\n%s%s%s",
+	   up, up, up,
+	   (float)ipos/1024, (float)xfer/1024, (float)max/1024, bs,
+	   down, down, down);
+#endif
   /* expand file to the right length */
   if (!o_chr) pwrite (odes, buf, 0, opos);
   while ( (!max || (max-xfer > 0))
@@ -266,8 +281,14 @@ int copyfile (const off_t max, const int bs)
     rd = readblock (toread);
 
     /* EOF */
-    if (!errno && rd == 0) break;
-    if (errno) {
+    if (rd == 0 && !errno) {
+	    if (!errs)
+		    fplog (stderr, "dd_rescue: (info): %s (%.1fk): EOF\n", 
+			   iname, (float)ipos/1024);
+	    return errs;
+    }
+    /* READ ERROR */
+    if (rd < toread/* && errno*/) {
       /* Read error occurred: Print warning */
       printstatus (stderr, log, bs, 1); errs++;
       /* Some errnos are fatal */
@@ -290,40 +311,98 @@ int copyfile (const off_t max, const int bs)
 	}
 	fprintf (stderr, "%s%s%s", down, down, down);
 	/* advance */
-	if (nosparse) errs += (writeblock (toread) == -1? 1: 0);
+	errno = 0;
+	if (nosparse) {
+		ssize_t wr = 0;
+		errs += ((wr = writeblock (rd)) < rd ? 1: 0);
+		if (wr < 0 && (errno == ENOSPC 
+			       || (errno == EFBIG && !reverse))) return errs;
+		if (rd != wr) {
+			fplog (stderr, "dd_rescue: (warning): assumption rd(%i) == wr(%i) failed! \n", rd, wr);
+			/*
+			fplog (stderr, "dd_rescue: (warning): %s (%.1fk): %s!\n", 
+			       oname, (float)opos/1024, strerror (errno));
+			fprintf (stderr, "%s%s%s", down, down, down);
+			 */
+		}
+	}
 	fxfer += toread; xfer += toread;
-	if (reverse) {ipos -= toread; opos -= toread;}
-	else {ipos += toread; opos += toread;}
+	if (reverse) { ipos -= toread; opos -= toread; }
+	else { ipos += toread; opos += toread; }
       } else {
-	/* Error with large blocks: Try small ones ... */
 	off_t new_max = xfer + toread;
+	off_t old_xfer;
+	/* Error with large blocks: Try small ones ... */
 	if (verbose) fprintf (stderr, "dd_rescue: (info): problems at ipos %.1fk: %s \n                 fall back to smaller blocksize \n%s%s%s",
 			     (float)ipos/1024, strerror(errno), down, down, down);
+	/* But first: write available data and advance (optimization) */
+	if (rd > 0) {
+		ssize_t wr = 0; errno = 0;
+		if (!sparse || !blockiszero (buf, bs))
+			errs += ((wr = writeblock (rd)) < rd ? 1: 0);
+		if (!reverse) { 
+			ipos += rd; opos += rd; 
+			sxfer += wr; xfer += rd;
+		}
+		/* 
+		else {
+			new_max -= rd;
+		}
+		 */
+		if (wr < 0 && (errno == ENOSPC 
+			       || (errno == EFBIG && !reverse))) return errs;
+		if (rd != wr && !sparse) {
+			fplog (stderr, "dd_rescue: (warning): assumption rd(%i) == wr(%i) failed! \n", rd, wr);
+			/*
+			fplog (stderr, "dd_rescue: (warning): %s (%.1fk): %s!\n", 
+			       oname, (float)opos/1024, strerror (errno));
+			fprintf (stderr, "%s%s%s", down, down, down);
+			 */
+		}
+	} /* rd > 0 */
+	old_xfer = xfer;
 	errs += (err = copyfile (new_max, hardbs));
-	
+	/* EOF */
+	if (!err && old_xfer == xfer) return errs;
+	/*
+	if (reverse && rd) {
+		ipos -= rd; opos -= rd;
+		xfer += rd; sxfer += wr;
+	}
+	*/	
 	/* Stay with small blocks, until we could read two whole 
 	   large ones without errors */
+	new_max = xfer;
 	while (err && (!max || (max-xfer > 0)) && ((!reverse) || (ipos > 0 && opos > 0))) {
-	  new_max += 2*softbs;
-	  if (new_max > max) new_max = max;
+	  new_max += 2*softbs; old_xfer = xfer;
+	  if (max && new_max > max) new_max = max;
 	  errs += (err = copyfile (new_max, hardbs));
 	}
+	errno = 0;
+	/* EOF ? */      
+	if (!err && xfer == old_xfer) return errs;
 	if (verbose) fprintf (stderr, "dd_rescue: (info): ipos %.1fk promote to large bs again! \n%s%s%s",
 			     (float)ipos/1024, down, down, down);
-	
       } /* bs == hardbs */
     } else {
       /* errno == 0: We can write to disk */
-      
+            
       if (rd > 0) {
 	ssize_t wr = 0;
-	if (!sparse || !blockzero (buf, bs))
-	  errs += ((wr = writeblock (rd)) == -1? 1: 0);
+	if (!sparse || !blockiszero (buf, bs))
+	  errs += ((wr = writeblock (rd)) < rd ? 1: 0);
 	sxfer += wr; xfer += rd;
-	if (reverse) {ipos -= rd; opos -= rd;}
-	else {ipos += rd; opos += rd;}
-	if (wr < 0 && errno == ENOSPC) return errs;
-	if (rd != wr && !sparse) fplog (stderr, "dd_rescue: (warning): assumption rd(%i) == wr(%i) failed!\n", rd, wr);
+	if (reverse) { ipos -= rd; opos -= rd; }
+	else { ipos += rd; opos += rd; }
+	if (wr < 0 && (errno == ENOSPC 
+		       || (errno == EFBIG && !reverse))) return errs;
+	if (rd != wr && !sparse) {
+		fplog (stderr, "dd_rescue: (warning): assumption rd(%i) == wr(%i) failed! \n", rd, wr);
+		fplog (stderr, "dd_rescue: (warning): %s (%.1fk): %s!\n", 
+		       oname, (float)opos/1024, strerror (errno));
+		fprintf (stderr, "%s%s", down, down);
+		errno = 0;
+	}
       } /* rd > 0 */
     } /* errno */
     if (!quiet && !(xfer % (16*softbs)) && (xfer % (512*softbs))) 
@@ -521,7 +600,7 @@ int main (int argc, char* argv[])
     cleanup (); exit (19);
   }
   /* Open input and output files */
-  ides = openfile (iname, O_RDONLY);
+  ides = openfile (iname, O_RDONLY | olarge);
   if (ides < 0) {
     fplog (stderr, "dd_rescue: (fatal): %s: %s\n", iname, strerror (errno));
     cleanup (); exit (22);
@@ -530,10 +609,11 @@ int main (int argc, char* argv[])
   /* Overwrite? */
   /* Special case '-': stdout */
   if (strcmp (oname, "-"))
-	odes = open (oname, O_WRONLY, 0640);
+	odes = open (oname, O_WRONLY | olarge, 0640);
   else odes = 0;
+  if (odes > 0) close (odes);
   if (odes > 0 && interact) {
-    int a; close (odes);
+    int a;
     do {
       fprintf (stderr, "dd_rescue: (question): %s existing %s [y/n] ?", (trunc? "Overwrite": "Write into"), oname);
       a = toupper (fgetc (stdin)); //fprintf (stderr, "\n");
@@ -544,7 +624,7 @@ int main (int argc, char* argv[])
     }
   }
 
-  odes = openfile (oname, O_WRONLY | O_CREAT /*| O_EXCL*/ | trunc);
+  odes = openfile (oname, O_WRONLY | O_CREAT | olarge /*| O_EXCL*/ | trunc);
   if (odes < 0) {
     fplog (stderr, "dd_rescue: (fatal): %s: %s\n", oname, strerror (errno));
     cleanup (); exit (24);
