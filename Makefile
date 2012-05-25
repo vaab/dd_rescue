@@ -1,13 +1,14 @@
 # Makefile for dd_rescue
 # (c) garloff@suse.de, 99/10/09, GNU GPL
-# $Id: Makefile,v 1.13 2003/12/03 01:30:29 garloff Exp $
+# $Id: Makefile,v 1.14.2.1 2004/08/28 22:56:40 garloff Exp $
 
-VERSION = 1.03
+VERSION = 1.04
 
 DESTDIR = 
 
 CC = gcc
-CFLAGS = -O2 -Wall -g $(EXTRA_CFLAGS)
+RPM_OPT_FLAGS = -O2 -Wall -g
+CFLAGS = $(RPM_OPT_FLAGS) $(EXTRA_CFLAGS)
 DEFINES = -DVERSION=\"$(VERSION)\"
 INSTALL = install
 INSTALLFLAGS = -s
@@ -19,6 +20,7 @@ MYDIR = dd_rescue
 TARGETS = dd_rescue
 OBJECTS = dd_rescue.o
 DOCDIR = $(prefix)/share/doc/packages
+INSTASROOT = -o root -g root
 
 default: $(TARGETS)
 
@@ -36,6 +38,6 @@ dist: distclean
 
 install: $(TARGETS)
 	mkdir -p $(INSTALLDIR)
-	$(INSTALL) $(INSTALLFLAGS) -o root -g root -m 755 $(TARGETS) $(INSTALLDIR)
-	#$(INSTALL) -o root -g root -m 755 -d $(DOCDIR)/dd_rescue
-	#$(INSTALL) -o root -g root -m 644 README.dd_rescue $(DOCDIR)/dd_rescue/
+	$(INSTALL) $(INSTALLFLAGS) $(INSTASROOT) -m 755 $(TARGETS) $(INSTALLDIR)
+	#$(INSTALL) $(INSTASROOT) -m 755 -d $(DOCDIR)/dd_rescue
+	#$(INSTALL) $(INSTASROOT) -m 644 README.dd_rescue $(DOCDIR)/dd_rescue/
