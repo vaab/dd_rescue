@@ -119,7 +119,7 @@ dd_rescue has a few nifty features:
   previously.)
 * Support for direct I/O; this will circumvent kernel buffering and
   thus will expose medium errors right away. With 
-  dd_rescue -b4k -B4k -d -D -A bdev bdev you will read a bdev and write
+  dd_rescue -d -D -A bdev bdev you will read a bdev and write
   things back to itself -- if some unreadable blocks are found, those
   will be filled with zeros -- the defect management of your hardware
   might result in all of your disk to be usable again afterwards,
@@ -160,4 +160,4 @@ Have fun!
 
 
 Kurt Garloff <kurt@garloff.de>, 2000-08-30
-$Id: README.dd_rescue,v 1.13 2012/05/17 19:39:34 garloff Exp $
+$Id: README.dd_rescue,v 1.14 2012/05/19 20:52:36 garloff Exp $
