@@ -1,8 +1,8 @@
 # Makefile for dd_rescue
 # (c) garloff@suse.de, 99/10/09, GNU GPL
-# $Id: Makefile,v 1.14.2.1 2004/08/28 22:56:40 garloff Exp $
+# $Id: Makefile,v 1.16 2004/08/28 22:55:23 garloff Exp $
 
-VERSION = 1.04
+VERSION = 1.10
 
 DESTDIR = 
 
@@ -40,4 +40,4 @@ install: $(TARGETS)
 	mkdir -p $(INSTALLDIR)
 	$(INSTALL) $(INSTALLFLAGS) $(INSTASROOT) -m 755 $(TARGETS) $(INSTALLDIR)
 	#$(INSTALL) $(INSTASROOT) -m 755 -d $(DOCDIR)/dd_rescue
-	#$(INSTALL) $(INSTASROOT) -m 644 README.dd_rescue $(DOCDIR)/dd_rescue/
+	#$(INSTALL) $(INSTASROOT) -g root -m 644 README.dd_rescue $(DOCDIR)/dd_rescue/

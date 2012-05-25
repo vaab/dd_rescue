@@ -19,7 +19,6 @@ There are several differences:
 * It uses two block sizes, a large (soft) block size and a small (hard) block
   size. In case of errors, the size falls back to the small one and is
   promoted again after a while without errors.
-* It does not (yet) support non-seekable in- or output.
 
 
 Purpose of dd_rescue
@@ -84,11 +83,8 @@ Due to the way the program works (input and output are always written to the
 designated position, i.e. a seek() is done before the I/O operation is
 actually performed), char devices can not be read from or written to.
 Therefore you can't redirect output to stdout.
-It would be useful to support non-seekable devices (char devices, pipes,
-stdin/out) on one side, though. This will be implemented later and is
-scheduled for the dd_rescue-1.2 release. 
-(Actually, limited support is already there. dd_rescue /dev/zero /dev/hda
- works.)
+This limitation has been lifted in version 1.10; though with non-seekable
+in- and our output, you can't recover from errors on that channel.
 
 
 Copyright
@@ -121,4 +117,4 @@ Have fun!
 
 
 Kurt Garloff <kurt@garloff.de>, 2000-08-30
-$Id: README.dd_rescue,v 1.8 2004/08/28 16:57:20 garloff Exp $
+$Id: README.dd_rescue,v 1.9 2004/08/28 21:45:09 garloff Exp $
