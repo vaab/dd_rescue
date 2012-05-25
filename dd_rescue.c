@@ -29,7 +29,7 @@
 # define VERSION "(unknown)"
 #endif
 
-#define ID "$Id: dd_rescue.c,v 1.76 2010/08/13 15:27:28 garloff Exp $"
+#define ID "$Id: dd_rescue.c,v 1.95 2010/08/13 21:49:58 garloff Exp $"
 
 #ifndef SOFTBLOCKSIZE
 # define SOFTBLOCKSIZE 65536
@@ -85,7 +85,7 @@ int maxerr, nrerr, reverse, dotrunc, abwrerr, sparse, nosparse;
 int verbose, quiet, interact, force;
 void* buf;
 char *lname, *iname, *oname, *bbname = NULL;
-off_t ipos, opos, xfer, lxfer, sxfer, fxfer, maxxfer, init_opos;
+off_t ipos, opos, xfer, lxfer, sxfer, fxfer, maxxfer, init_opos, ilen, estxfer;
 
 int ides, odes, identical, pres;
 int o_dir_in, o_dir_out, dosplice;
@@ -105,6 +105,7 @@ clock_t startclock;
 const char* up = UP;
 const char* down = DOWN;
 const char* right = RIGHT;
+char *graph;
 
 inline float difftimetv(const struct timeval* const t2, 
 			const struct timeval* const t1)
@@ -188,10 +189,85 @@ void check_seekable(const int id, const int od)
 	errno = 0;
 }
 
+/* Calc position in graph */
+int gpos(off_t off)
+{
+	static const int glen = 40; //strlen(graph) - 2;
+	return 1+(glen*off/ilen);
+}
+
+/* Prepare graph */
+void preparegraph()
+{
+	graph = strdup(":.........................................:");
+	if (reverse) {
+		graph[gpos(ipos)+1] = '<';
+		graph[gpos(ipos-estxfer)-1] = '>';
+
+	} else {
+		graph[gpos(ipos)-1] = '>';
+		graph[gpos(ipos+estxfer)+1] = '<';
+	}
+}
+
+void updgraph(int err)
+{
+	int off;
+	if (!ilen)
+		return;
+	off = gpos(ipos);
+	if (graph[off] == 'x')
+		return;
+	if (err)
+		graph[off] = 'x';
+	else
+		graph[off] = '-';
+}
+
+/* Tries to determine size of input file */
+void input_length()
+{
+	struct stat stbuf;
+	if (i_chr)
+		return;
+	if (fstat(ides, &stbuf))
+		return;
+	if (S_ISLNK(stbuf.st_mode))
+		return;
+	if (S_ISBLK(stbuf.st_mode)) {
+		/* Do magic to figure size of block dev */
+		off_t p = lseek(ides, 0, SEEK_CUR);
+		if (p == -1)
+			return;
+		ilen = lseek(ides, 0, SEEK_END) + 1;
+		lseek(ides, p, SEEK_SET);
+	} else {
+		off_t diff;
+		ilen = stbuf.st_size;
+		if (!ilen)
+			return;
+		diff = ilen - stbuf.st_blocks*512;
+		if (diff >= 4096 && (float)diff/ilen > 0.05)
+		       fplog(stderr, "dd_rescue: (info) %s is sparse (%i%%) %s\n", iname, (int)(100.0*diff/ilen), (sparse? "": ", consider -a"));
+	}
+	if (!ilen)
+		return;
+	if (!reverse)
+		estxfer = ilen - ipos;
+	else
+		estxfer = ipos;
+	if (maxxfer && estxfer > maxxfer)
+		estxfer = maxxfer;
+	fplog(stderr, "dd_rescue: (info) expect to copy %likB from %s\n",
+			estxfer/1024, iname);
+	preparegraph();
+}
+
 
 void doprint(FILE* const file, const int bs, const clock_t cl, 
 	     const float t1, const float t2, const int sync)
 {
+	float avgrate = (float)xfer/(t1*1024);
 	fprintf(file, "dd_rescue: (info): ipos:%12.1fk, opos:%12.1fk, xferd:%12.1fk\n",
 		(float)ipos/1024, (float)opos/1024, (float)xfer/1024);
 	fprintf(file, "             %s  %s  errs:%7i, errxfer:%12.1fk, succxfer:%12.1fk\n",
@@ -200,13 +276,24 @@ void doprint(FILE* const file, const int bs, const clock_t cl,
 	if (sync || (file != stdin && file != stdout) )
 		fprintf(file, "             +curr.rate:%9.0fkB/s, avg.rate:%9.0fkB/s, avg.load:%5.1f%%\n",
 			(float)(xfer-lxfer)/(t2*1024),
-			(float)xfer/(t1*1024),
+			avgrate,
 			100.0*(cl-startclock)/(CLOCKS_PER_SEC*t1));
 	else
 		fprintf(file, "             -curr.rate:%s%s%s%s%s%s%s%s%skB/s, avg.rate:%9.0fkB/s, avg.load:%5.1f%%\n",
 			right, right, right, right, right, right, right, right, right,
 			(float)xfer/(t1*1024),
 			100.0*(cl-startclock)/(CLOCKS_PER_SEC*t1));
+	if (estxfer && avgrate > 0) {
+		int sec = (estxfer-xfer)/(1024*avgrate);
+		int hour = sec / 3600;
+		int min = (sec % 3600) / 60;
+		sec = sec % 60;
+		updgraph(0);
+		fprintf(file, "             %s %3i%%  ETA: %2i:%02i:%02i \n",
+			graph, (int)(100*xfer/estxfer), hour, min, sec);
+	} else
+		fprintf(file, "\n");
+
 }
 
 void printstatus(FILE* const file1, FILE* const file2,
@@ -214,17 +301,20 @@ void printstatus(FILE* const file1, FILE* const file2,
 {
 	float t1, t2; 
 	clock_t cl;
+	static int einvalwarn = 0;
 
 	if (file1 == stderr || file1 == stdout) 
-		fprintf(file1, "%s%s%s", up, up, up);
+		fprintf(file1, "%s%s%s%s", up, up, up, up);
 	if (file2 == stderr || file2 == stdout) 
-		fprintf(file2, "%s%s%s", up, up, up);
+		fprintf(file2, "%s%s%s%s", up, up, up, up);
 
 	if (sync) {
 		int err = fsync(odes);
-		if (err && errno != EINVAL)
+		if (err && (errno != EINVAL || !einvalwarn)) {
 			fplog(stderr, "dd_rescue: (warning): sync %s (%.1fk): %s!  \n",
 			      oname, (float)ipos/1024, strerror(errno));
+			++einvalwarn;
+		}
 	}
 
 	gettimeofday(&currenttime, NULL);
@@ -259,7 +349,7 @@ void printreport()
 	FILE *report = (!quiet || nrerr)? stderr: 0;
 	fplog(report, "Summary for %s -> %s:\n", iname, oname);
 	if (report)
-		fprintf(stderr, "%s%s%s", down, down, down);
+		fprintf(stderr, "%s%s%s%s", down, down, down, down);
 	printstatus(report, logfd, 0, 1);
 }
 
@@ -423,22 +513,24 @@ void advancepos(const ssize_t rd, const ssize_t wr)
 int dowrite(const ssize_t rd)
 {
 	int errs = 0;
+	int fatal = 0;
 	/* errno == 0: We can write to disk */
 	ssize_t wr = 0;
 	if (!sparse || blockiszero(buf, rd) < rd)
 		errs += ((wr = writeblock(rd)) < rd ? 1: 0);
 	advancepos(rd, wr);
-	if (wr < 0 && (errno == ENOSPC 
-		   || (errno == EFBIG && !reverse))) 
-		return -errs;
+	if (wr <= 0 && (errno == ENOSPC 
+		   || (errno == EFBIG && !reverse)))
+		++fatal;
 	if (rd != wr && !sparse) {
 		fplog(stderr, "dd_rescue: (warning): assumption rd(%i) == wr(%i) failed! \n", rd, wr);
-		fplog(stderr, "dd_rescue: (warning): %s (%.1fk): %s!\n", 
-		      oname, (float)opos/1024, strerror(errno));
-		fprintf(stderr, "%s%s", down, down);
+		fplog(stderr, "dd_rescue: (%s): write %s (%.1fk): %s!\n", 
+		      (fatal? "fatal": "warning"), oname, 
+		      (float)opos/1024, strerror(errno));
+		fprintf(stderr, "%s%s%s", down, down, down);
 		errno = 0;
 	}
-	return errs;
+	return fatal? -errs: errs;
 }
 
 int partialwrite(const ssize_t rd)
@@ -454,10 +546,10 @@ int copyfile_hardbs(const off_t max)
 	ssize_t toread;
 	int errs = 0; errno = 0;
 #if 0	
-	fprintf(stderr, "%s%s%s copyfile (ipos=%.1fk, xfer=%.1fk, max=%.1fk, bs=%i)                         ##\n%s%s%s",
-		up, up, up,
+	fprintf(stderr, "%s%s%s%s copyfile (ipos=%.1fk, xfer=%.1fk, max=%.1fk, bs=%i)                         ##\n%s%s%s%s",
+		up, up, up, up,
 		(float)ipos/1024, (float)xfer/1024, (float)max/1024, hardbs,
-		down, down, down);
+		down, down, down, down);
 #endif
 	while ((toread = blockxfer(max, hardbs)) > 0) { 
 		ssize_t rd = readblock(toread);
@@ -487,7 +579,7 @@ int copyfile_hardbs(const off_t max)
 				printreport();
 				cleanup(); exit(32);
 			}
-			fprintf(stderr, "%s%s%s", down, down, down);
+			fprintf(stderr, "%s%s%s%s", down, down, down, down);
 			
 			errno = 0;
 			if (nosparse || 
@@ -495,7 +587,7 @@ int copyfile_hardbs(const off_t max)
 				ssize_t wr = 0;
 				memset(buf+rd, 0, toread-rd);
 				errs += ((wr = writeblock(toread)) < toread ? 1: 0);
-				if (wr < 0 && (errno == ENOSPC 
+				if (wr <= 0 && (errno == ENOSPC 
 					   || (errno == EFBIG && !reverse))) 
 					return errs;
 				if (toread != wr) {
@@ -503,11 +595,12 @@ int copyfile_hardbs(const off_t max)
 					/*
 					fplog(stderr, "dd_rescue: (warning): %s (%.1fk): %s!\n", 
 					      oname, (float)opos/1024, strerror(errno));
-					fprintf(stderr, "%s%s%s", down, down, down);
+					fprintf(stderr, "%s%s%s%s", down, down, down, down);
 				 	*/
 				}
 			}
 			savebb(ipos/hardbs);
+			updgraph(1);
 			fxfer += toread; xfer += toread;
 			if (reverse) { 
 				ipos -= toread; opos -= toread; 
@@ -535,10 +628,10 @@ int copyfile_softbs(const off_t max)
 	ssize_t toread;
 	int errs = 0; errno = 0;
 #if 0	
-	fprintf(stderr, "%s%s%s copyfile (ipos=%.1fk, xfer=%.1fk, max=%.1fk, bs=%i)                         ##\n%s%s%s",
-		up, up, up,
+	fprintf(stderr, "%s%s%s%s copyfile (ipos=%.1fk, xfer=%.1fk, max=%.1fk, bs=%i)                         ##\n%s%s%s%s",
+		up, up, up, up,
 		(float)ipos/1024, (float)xfer/1024, (float)max/1024, softbs,
-		down, down, down);
+		down, down, down, down);
 #endif
 	/* expand file to AT LEAST the right length 
 	 * FIXME: 0 byte writes do NOT expand file */
@@ -567,8 +660,8 @@ int copyfile_softbs(const off_t max)
 			off_t new_max = xfer + toread;
 			/* Error with large blocks: Try small ones ... */
 			if (verbose) 
-				fprintf(stderr, "dd_rescue: (info): problems at ipos %.1fk: %s \n                 fall back to smaller blocksize \n%s%s%s",
-				        (float)ipos/1024, strerror(errno), down, down, down);
+				fprintf(stderr, "dd_rescue: (info): problems at ipos %.1fk: %s \n                 fall back to smaller blocksize \n%s%s%s%s",
+				        (float)ipos/1024, strerror(errno), down, down, down, down);
 			/* But first: write available data and advance (optimization) */
 			if ((ret = partialwrite(rd)) < 0)
 				return ret;
@@ -599,8 +692,8 @@ int copyfile_softbs(const off_t max)
 			if (!err && xfer == old_xfer)
 				return errs;
 			if (verbose) 
-				fprintf(stderr, "dd_rescue: (info): ipos %.1fk promote to large bs again! \n%s%s%s",
-					(float)ipos/1024, down, down, down);
+				fprintf(stderr, "dd_rescue: (info): ipos %.1fk promote to large bs again! \n%s%s%s%s",
+					(float)ipos/1024, down, down, down, down);
 		} else {
 	      		int err = dowrite(rd);
 			if (err < 0)
@@ -629,8 +722,8 @@ int copyfile_splice(const off_t max)
 					SPLICE_F_MOVE | SPLICE_F_MORE);
 		if (rd < 0) {
 			close(fd_pipe[0]); close(fd_pipe[1]);
-			fplog(stderr, "dd_rescue: (info): %s (%.1fk): fall back to userspace copy\n%s%s%s", 
-			      iname, (float)ipos/1024, down, down, down);
+			fplog(stderr, "dd_rescue: (info): %s (%.1fk): fall back to userspace copy\n%s%s%s%s", 
+			      iname, (float)ipos/1024, down, down, down, down);
 			return copyfile_softbs(max);
 		}
 		if (rd == 0) {
@@ -1026,6 +1119,7 @@ int main(int argc, char* argv[])
 		cleanup(); exit(19);
 	}
 		
+	input_length();
 
 	if (dosplice) {
 		fplog(stderr, "dd_rescue: splice copy, ignoring -a, -r, -y\n");
@@ -1050,13 +1144,15 @@ int main(int argc, char* argv[])
 	memcpy(&lasttime, &starttime, sizeof(lasttime));
 
 	if (!quiet) {
-		fprintf(stderr, "%s%s%s", down, down, down);
+		fprintf(stderr, "%s%s%s%s", down, down, down, down);
 		printstatus(stderr, 0, softbs, 0);
 	}
 
+#ifdef HAVE_SPLICE
 	if (dosplice)
 		c = copyfile_splice(maxxfer);
 	else
+#endif
 		c = copyfile_softbs(maxxfer);
 	gettimeofday(&currenttime, NULL);
 	printreport();

@@ -31,7 +31,7 @@ Why?
   all the data off it and retiring it seems to be suitable. However, you
   can't access the files, because the file system is damaged.
 * Now, you want to copy the whole partition into a file. You burn it on
-  CD-Rom, just to never lose it again.
+  DVD, just to never lose it again.
   You can setup a loop device, and repair (fsck) it and hopefully are able
   to mount it.
 * Copying this partition with normal Un*x tools like cat or dd will fail, as
@@ -58,6 +58,7 @@ Does it actually work?
 Yes. I wrote a predecessor program (dw) and saved most of the data of two
 crashed hard disks. The current program also helped me secure the data of
 one beginning to have problems.
+
 A good approach is first to copy all those sectors which are working without
 problems. For this, you approach the critical regions from both sides.
 It is a good idea to take notes on which sectors are still missing.
@@ -66,6 +67,9 @@ Otherwise, you should try to fill in more of the critical sectors. Some of
 them might be readable and provide some more useful data. This will take a
 long time, however, depending on how hard your hard disk tries to read bad
 sectors.
+
+dd_rhelp from LAB Valentin does automate some of this, so you might want to
+give that a try.
 
 
 Limitations
@@ -117,4 +121,4 @@ Have fun!
 
 
 Kurt Garloff <kurt@garloff.de>, 2000-08-30
-$Id: README.dd_rescue,v 1.9 2004/08/28 21:45:09 garloff Exp $
+$Id: README.dd_rescue,v 1.10 2010/08/13 21:15:59 garloff Exp $
