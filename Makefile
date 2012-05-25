@@ -1,15 +1,15 @@
 # Makefile for dd_rescue
 # (c) garloff@suse.de, 99/10/09, GNU GPL
-# $Id: Makefile,v 1.27 2010/08/13 21:12:45 garloff Exp $
+# $Id: Makefile,v 1.32 2010/08/22 13:45:46 garloff Exp $
 
-VERSION = 1.18
+VERSION = 1.20
 
 DESTDIR = 
 
 CC = gcc
 RPM_OPT_FLAGS = -O2 -Wall -g
 CFLAGS = $(RPM_OPT_FLAGS) $(EXTRA_CFLAGS)
-DEFINES = -DVERSION=\"$(VERSION)\"
+DEFINES = -DVERSION=\"$(VERSION)\" 
 INSTALL = install
 INSTALLFLAGS = -s
 prefix = $(DESTDIR)/usr
@@ -21,11 +21,24 @@ TARGETS = dd_rescue
 OBJECTS = dd_rescue.o
 DOCDIR = $(prefix)/share/doc/packages
 INSTASROOT = -o root -g root
+LIBDIR = /usr/lib
 
 default: $(TARGETS)
 
+libfalloc: dd_rescue.c
+	$(CC) $(CFLAGS) -DHAVE_FALLOCATE=1 -DHAVE_LIBFALLOCATE=1 $(DEFINES) $< -o dd_rescue -lfallocate
+
+libfalloc-static: dd_rescue.c
+	$(CC) $(CFLAGS) -DHAVE_FALLOCATE=1 -DHAVE_LIBFALLOCATE=1 $(DEFINES) $< -o dd_rescue $(LIBDIR)/libfallocate.a
+
+falloc: dd_rescue.c
+	$(CC) $(CFLAGS) -DHAVE_FALLOCATE=1 $(DEFINES) $< -o dd_rescue
+
 dd_rescue: dd_rescue.c
 	$(CC) $(CFLAGS) $(DEFINES) $< -o $@
+
+strip: dd_rescue
+	strip -S $<
 
 clean:
 	rm -f $(TARGETS) $(OBJECTS) core

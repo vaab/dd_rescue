@@ -68,6 +68,12 @@ them might be readable and provide some more useful data. This will take a
 long time, however, depending on how hard your hard disk tries to read bad
 sectors.
 
+You can overwrite a disk or a partition with its own data -- the drive's
+reallocation procedure might result in the whole disk to be readable again
+afterwards (yet the replaced sectors will be filled with 0). If you want
+to use dd_rescue for this purpose, please use O_DIRECT and a block size of 
+4096.
+
 dd_rhelp from LAB Valentin does automate some of this, so you might want to
 give that a try.
 
@@ -121,4 +127,4 @@ Have fun!
 
 
 Kurt Garloff <kurt@garloff.de>, 2000-08-30
-$Id: README.dd_rescue,v 1.10 2010/08/13 21:15:59 garloff Exp $
+$Id: README.dd_rescue,v 1.11 2010/08/22 14:56:00 garloff Exp $
