@@ -28,7 +28,7 @@
 # define VERSION "(unknown)"
 #endif
 
-#define ID "$Id: dd_rescue.c,v 1.102 2010/08/22 14:49:23 garloff Exp $"
+#define ID "$Id: dd_rescue.c,v 1.103 2010/08/30 21:42:05 garloff Exp $"
 
 #ifndef SOFTBLOCKSIZE
 # define SOFTBLOCKSIZE 65536
@@ -275,6 +275,28 @@ void input_length()
 	fplog(stderr, "dd_rescue: (info) expect to copy %LikB from %s\n",
 			estxfer/1024, iname);
 	preparegraph();
+}
+
+void sparse_output_warn()
+{
+	struct stat stbuf;
+	if (o_chr)
+		return;
+	if (fstat(odes, &stbuf))
+		return;
+	if (S_ISCHR(stbuf.st_mode)) {
+		o_chr = 1;
+		return;
+	}
+	if (S_ISBLK(stbuf.st_mode)) {
+		if (sparse || !nosparse)
+			fplog(stderr, "dd_rescue: (warning): %s is a block device; -a not recommended; -A recommended\n", oname);
+		return;
+	}
+	off_t eff_opos = opos == -1? ipos: opos;
+	if (sparse && (eff_opos < stbuf.st_size))
+		fplog(stderr, "dd_rescue: (warning): write into %s (@%li/%li): sparse not recommended\n", 
+				oname, eff_opos, stbuf.st_size);
 }
 
 #ifdef HAVE_FALLOCATE
@@ -1105,6 +1127,7 @@ int main(int argc, char* argv[])
 		exit(19);
 	}
 
+	sparse_output_warn();
 	if (o_chr) {
 		if (!nosparse)
 			fprintf(stderr, "dd_rescue: (warning): Don't use sparse writes for non-seekable output\n");
